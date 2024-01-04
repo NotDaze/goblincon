@@ -49,8 +49,8 @@ const httpServer = app.listen(PORT, () => {
 });
 const signalingServer = new signaling_server_1.default({ server: httpServer, clientTracking: false }, signaling_server_1.SignalingSocket);
 app.get("/", (req, res) => {
-    app.use(express_1.default.static(__dirname + "/Public"));
-    res.sendFile(__dirname + "/Public/index.html");
+    app.use(express_1.default.static(__dirname + "/Client"));
+    res.sendFile(__dirname + "/Client/index.html");
 });
 signalingServer.connected.connect(() => {
     console.log("Signaling!");

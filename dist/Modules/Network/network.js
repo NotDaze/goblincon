@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Group = exports.RemotePeer = exports.LocalMultiPeer = exports.LocalMonoPeer = exports.RemotePeerIndex = exports.MessageHandler = exports.Message = exports.MessageDomain = exports.MessageNode = exports.Packet = exports.ConnectionState = exports.TransferMode = void 0;
+exports.Group = exports.RemotePeer = exports.LocalMultiPeer = exports.LocalMonoPeer = exports.RemotePeerIndex = exports.MessageHandler = exports.Message = exports.MessageDomain = exports.Packet = exports.ConnectionState = exports.TransferMode = void 0;
 const state_1 = __importDefault(require("../Core/state"));
 const id_index_1 = __importDefault(require("../Core/id_index"));
 const signal_1 = __importStar(require("../Core/signal"));
@@ -48,6 +48,9 @@ var ConnectionState;
     //CLOSED, // maybe
 })(ConnectionState || (exports.ConnectionState = ConnectionState = {}));
 class Packet {
+    message;
+    peer;
+    data;
     //public raw: Uint8Array;
     //public branching = new Array<number>();
     //public branching: Array<number>;
@@ -60,112 +63,71 @@ class Packet {
 }
 exports.Packet = Packet;
 class MessageNode {
-    constructor(address) {
+    //protected address: Uint8Array;
+    /*constructor(address: Uint8Array) {
         this.address = address;
-    }
+    }*/
     findMessage(stream) {
         console.error("Overwrite MessageNode.findMessage()");
-        return null;
-    }
-    packetToRaw() {
-    }
-    rawToPacket() {
+        return undefined;
     }
 }
-exports.MessageNode = MessageNode;
 class MessageDomain extends MessageNode {
-    constructor(idByteCount = 2, address = new Uint8Array(), nodes = []) {
-        super(address);
-        this.nodes = new id_index_1.default();
+    //private nodes: Map<;
+    nodes = new Array();
+    idByteCount;
+    constructor(nodes, idByteCount = 1) {
+        //super(address);
+        super();
         this.idByteCount = idByteCount;
         //this.nodes = Array.from(nodes);
-        for (const node of nodes)
-            this.nodes.add(node);
+        this.nodes = Array.from(nodes);
+    }
+    *[Symbol.iterator]() {
+        for (const node of this.nodes)
+            yield node;
     }
     findMessage(stream) {
         let id = arg_1.default.decodeInt(stream.next(this.idByteCount));
-        let next = this.nodes.get(id);
-        if (next == undefined) {
-            console.error("Invalid domain node ID: ", this.address, " | ", id, " | ", this.nodes.ids);
-            return null;
+        let next = this.nodes[id];
+        if (next === undefined) {
+            //console.error("Invalid domain node ID: ", this.address, " | ", id, " | ", this.nodes.ids);
+            console.error("Invalid domain node ID: ", id);
+            return undefined;
         }
         return next.findMessage(stream);
     }
-    createNodeAddress(id = this.nodes.size) {
+    /*private createNodeAddress(id = this.nodes.size): Uint8Array {
+        
         //let id = this.nodes.getNextID();
+        
         //let address = new Uint8Array(this.address.length + this.idByteCount);
         //address.set(this.address, 0);
         //address.set(this.)
-        return arg_1.default.joinByteArrays(this.address, arg_1.default.encodeInt(id, this.idByteCount));
-    }
+        
+        return Arg.joinByteArrays(
+            this.address,
+            Arg.encodeInt(id, this.idByteCount)
+        );
+        
+    }*/
     //public addNode(node: MessageNode): void {}
     getIdByteCount() {
         return this.idByteCount;
     }
-    newDomain(idByteCount = this.idByteCount) {
-        let id = this.nodes.getNextID();
-        let domain = new MessageDomain(idByteCount, this.createNodeAddress(id));
-        this.nodes.add(domain);
-        //console.log("New domain: ", id);
-        return domain;
-    }
-    newMessage(arg, transferMode = TransferMode.RELIABLE) {
-        let id = this.nodes.getNextID();
-        let message = new Message(this.createNodeAddress(id), arg, transferMode);
-        this.nodes.add(message);
-        //console.log("New message: ", id);
-        return message;
-    }
-    /*public createRaw(): Uint8Array {
-        
-        let messageID = this.messages.indexOf(message);
-        
-        if (messageID < 0)
-            throw "Invalid Message.";
-        
-        //let encodedData = message.encodePacketData(data);
-        
-        let stream = new ByteOStream();
-        stream.write(Arg.encodeInt(messageID, this.idByteCount));
-        message.streamEncode(data, stream);
-        
-        /*return ByteOStream.join(
-            Arg.encodeInt(messageID, this.idByteCount),
-            message.streamEncode(data)
-        );*/
-    //return stream.bytes;
-    /*let out = new Uint8Array(this.idByteCount + encodedData.length);
-    
-    out.set(Arg.encodeInt(messageID, this.idByteCount), 0);
-    out.set(encodedData, this.idByteCount);
-    
-    return out;*/
-    //}
-    createPackets(peer, raw) {
-        //console.log(raw);
-        let stream = new byteistream_1.default(raw);
-        let packets = new Array();
-        while (!stream.complete) {
-            //let messageID = Arg.decodeInt(stream.next(this.idByteCount));
-            //let message = this.messages[messageID];
-            let message = this.findMessage(stream);
-            if (!message) {
-                console.error("Unrecognized Message | ", raw);
-                break;
-            }
-            //packets.push(message.createPacket(stream));
-            packets.push(new Packet(message, peer, message.streamDecode(stream)));
-        }
-        stream.verifyExactComplete();
-        return packets;
-    }
 }
 exports.MessageDomain = MessageDomain;
 class Message extends MessageNode {
+    //static META_TIMESTAMP = symbol("META_TIMESTAMP");
+    /*static fromJSON() {
+        
+    }*/
+    //static RAW = Symbol("RAW"); // maybe
+    arg;
+    transferMode; // Not sure this is actually necessary, but eh
     //private conditions = new Array<(packet: Packet) => boolean>;
-    constructor(address, arg, transferMode = TransferMode.RELIABLE) {
-        super(address);
-        //console.log(address);
+    constructor(arg, transferMode = TransferMode.RELIABLE) {
+        super();
         this.arg = arg;
         this.transferMode = transferMode;
     }
@@ -187,23 +149,87 @@ class Message extends MessageNode {
     streamDecode(stream) {
         return arg_1.default.streamDecode(this.arg, stream);
     }
-    streamCreateRaw(data, stream) {
-        // Consider changing this - if an encoding error happens, the message address will still be written
-        stream.write(this.address);
-        this.streamEncode(data, stream);
-    }
-    createRaw(data) {
-        let stream = new byteostream_1.default();
-        this.streamCreateRaw(data, stream);
-        return stream.bytes;
-    }
 }
 exports.Message = Message;
 class MessageHandler {
-    constructor() {
-        this.conditions = new Map();
-        this.signals = new Map();
+    static CONDITION_PASSED = 0;
+    static CONDITION_FAILED = 1;
+    //private messageRoot: MessageDomain;
+    //private addresses = new Map<Message, Uint8Array>();
+    conditions = new Map();
+    signals = new Map();
+    /*constructor(messageRoot: MessageDomain) {
+        
+        this.messageRoot = messageRoot;
+        this.indexAddresses(messageRoot);
+        
     }
+    
+    private indexAddresses(node: MessageNode, address = new Uint8Array()): void {
+        
+        if (node instanceof MessageDomain) {
+            
+            let i = 0;
+            
+            for (const child of node) {
+                
+                this.indexAddresses(child, Arg.joinByteArrays(address, Arg.encodeInt(i, node.getIdByteCount())));
+                i++;
+                
+            }
+            
+        }
+        else if (node instanceof Message) {
+            this.addresses.set(node, address);
+        }
+        else {
+            // Throw?
+        }
+        
+    }
+    
+    createPackets(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
+        
+        //console.log(raw);
+        let stream = new ByteIStream(raw);
+        let packets = new Array<Packet<RemotePeerType>>();
+        
+        while (!stream.complete) {
+            
+            //let messageID = Arg.decodeInt(stream.next(this.idByteCount));
+            //let message = this.messages[messageID];
+            
+            let message = this.messageRoot.findMessage(stream);
+            
+            if (!message) {
+                console.error("Unrecognized Message | ", raw);
+                break;
+            }
+            
+            //packets.push(message.createPacket(stream));
+            
+            packets.push(
+                new Packet<RemotePeerType>(message, peer, message.streamDecode(stream))
+            );
+            
+        }
+        
+        stream.verifyExactComplete();
+        return packets;
+        
+    }
+    createRaw(message: Message, data: any, stream: ByteOStream): void {
+        
+        
+        
+    }
+    
+    hasMessage(message: Message): boolean {
+        return this.addresses.has(message);
+    }
+    getMessageAddress(message: Message): Uint8Array | undefined {
+        return this.addresses.get(message);
+    }*/
     hasMessageSignal(message) {
         return this.signals.has(message);
     }
@@ -219,23 +245,20 @@ class MessageHandler {
         this.getMessageSignal(message).connect(callback);
     }
     removeCallback(message, callback) {
-        if (this.hasMessageSignal(message)) {
+        if (this.hasMessageSignal(message))
             this.getMessageSignal(message).disconnect(callback);
-        }
     }
     addCondition(messages, condition) {
-        var _a;
         for (const message of (messages instanceof Message ? [messages] : messages)) {
             if (!this.conditions.has(message))
                 this.conditions.set(message, new Set());
-            (_a = this.conditions.get(message)) === null || _a === void 0 ? void 0 : _a.add(condition);
+            this.conditions.get(message)?.add(condition);
         }
     }
     removeCondition(messages, condition) {
-        var _a;
         for (const message of (messages instanceof Message ? [messages] : messages))
             if (this.conditions.has(message))
-                (_a = this.conditions.get(message)) === null || _a === void 0 ? void 0 : _a.delete(condition);
+                this.conditions.get(message)?.delete(condition);
     }
     onMessage(message, callback) {
         this.addCallback(message, callback);
@@ -263,8 +286,6 @@ class MessageHandler {
     }
 }
 exports.MessageHandler = MessageHandler;
-MessageHandler.CONDITION_PASSED = 0;
-MessageHandler.CONDITION_FAILED = 1;
 class RemotePeerIndex extends id_index_1.default {
     get peers() {
         return this.values;
@@ -326,14 +347,14 @@ class RemotePeerIndex extends id_index_1.default {
 }
 exports.RemotePeerIndex = RemotePeerIndex;
 class Peer {
+    id = -1;
+    state = new state_1.default(ConnectionState.NEW);
+    connected = new signal_1.default();
+    disconnected = new signal_1.default();
+    connecting = new signal_1.default();
+    connectionFailed = new signal_1.default();
+    closed = new signal_1.default();
     constructor() {
-        this.id = -1;
-        this.state = new state_1.default(ConnectionState.NEW);
-        this.connected = new signal_1.default();
-        this.disconnected = new signal_1.default();
-        this.connecting = new signal_1.default();
-        this.connectionFailed = new signal_1.default();
-        this.closed = new signal_1.default();
         this.state.changed.connect(([oldState, newState]) => {
             switch (newState) {
                 case ConnectionState.NEW:
@@ -368,10 +389,65 @@ class Peer {
     }
 }
 class LocalPeer extends Peer {
-    constructor(messageRoot = new MessageDomain(2), messageHandler = new MessageHandler()) {
+    messageRoot;
+    addresses = new Map();
+    messageHandler;
+    constructor(messageRoot, messageHandler = new MessageHandler()) {
         super();
         this.messageRoot = messageRoot;
         this.messageHandler = messageHandler;
+        this.indexAddresses(messageRoot);
+    }
+    indexAddresses(node, address = new Uint8Array()) {
+        if (node instanceof MessageDomain) {
+            let i = 0;
+            for (const child of node) {
+                this.indexAddresses(child, arg_1.default.joinByteArrays(address, arg_1.default.encodeInt(i, node.getIdByteCount())));
+                i++;
+            }
+        }
+        else if (node instanceof Message) {
+            this.addresses.set(node, address);
+        }
+        else {
+            // Throw?
+        }
+    }
+    createPackets(peer, raw) {
+        //console.log(raw);
+        let stream = new byteistream_1.default(raw);
+        let packets = new Array();
+        while (!stream.complete) {
+            //let messageID = Arg.decodeInt(stream.next(this.idByteCount));
+            //let message = this.messages[messageID];
+            let message = this.messageRoot.findMessage(stream);
+            if (!message) {
+                console.error("Unrecognized Message | ", raw);
+                break;
+            }
+            //packets.push(message.createPacket(stream));
+            packets.push(new Packet(message, peer, message.streamDecode(stream)));
+        }
+        stream.verifyExactComplete();
+        return packets;
+    }
+    streamCreateRaw(message, data, stream) {
+        let address = this.getMessageAddress(message);
+        if (address === undefined)
+            throw new Error("Invalid message for LocalPeer.streamCreateRaw()");
+        stream.write(address);
+        message.streamEncode(data, stream);
+    }
+    createRaw(message, data) {
+        let stream = new byteostream_1.default();
+        this.streamCreateRaw(message, data, stream);
+        return stream.bytes;
+    }
+    hasMessage(message) {
+        return this.addresses.has(message);
+    }
+    getMessageAddress(message) {
+        return this.addresses.get(message);
     }
     //private handleRaw(peer: RemotePeer, raw: Uint8Array): void {
     //	this.handlePackets(this.messageIndex.createPackets(peer, raw));
@@ -384,7 +460,7 @@ class LocalPeer extends Peer {
         this.messageHandler.handlePacket(packet);
     }
     handleRaw(peer, raw) {
-        this.handlePackets(this.messageRoot.createPackets(peer, raw));
+        this.handlePackets(this.createPackets(peer, raw));
     }
     /*public newDomain(idByteCount = ) {
         return this.messageDomain.newDomain(idByteCount);
@@ -409,7 +485,7 @@ class LocalPeer extends Peer {
     }
 }
 class LocalMonoPeer extends LocalPeer {
-    constructor(messageRoot = new MessageDomain(2), messageHandler = new MessageHandler()) {
+    constructor(messageRoot, messageHandler = new MessageHandler()) {
         super(messageRoot, messageHandler);
     }
     send(message, data) {
@@ -417,17 +493,14 @@ class LocalMonoPeer extends LocalPeer {
 }
 exports.LocalMonoPeer = LocalMonoPeer;
 class LocalMultiPeer extends LocalPeer {
-    constructor() {
-        super(...arguments);
-        this.peerAdded = new signal_1.default();
-        this.peerDropped = new signal_1.default();
-        this.peerConnected = new signal_1.default();
-        this.peerDisconnected = new signal_1.default();
-        this.peerConnecting = new signal_1.default();
-        this.peerConnectionFailed = new signal_1.default();
-        this.peerIndex = new RemotePeerIndex();
-        this.peerListeners = new Map();
-    }
+    peerAdded = new signal_1.default();
+    peerDropped = new signal_1.default();
+    peerConnected = new signal_1.default();
+    peerDisconnected = new signal_1.default();
+    peerConnecting = new signal_1.default();
+    peerConnectionFailed = new signal_1.default();
+    peerIndex = new RemotePeerIndex();
+    peerListeners = new Map();
     get peers() {
         return this.peerIndex.peers;
     }
@@ -477,14 +550,13 @@ class LocalMultiPeer extends LocalPeer {
         }
     }
     dropPeer(peer) {
-        var _a;
         if (this.getPeer(peer.getID()) != peer)
             console.error("Attempted to drop invalid peer.");
         if (!this.peerListeners.has(peer)) {
             console.error("Dropping peer that has no listener.");
         }
         else { // disconnect signals
-            (_a = this.peerListeners.get(peer)) === null || _a === void 0 ? void 0 : _a.disconnectAll();
+            this.peerListeners.get(peer)?.disconnectAll();
             this.peerListeners.delete(peer);
         }
         this.peerIndex.remove(peer.getID());
@@ -521,24 +593,24 @@ class LocalMultiPeer extends LocalPeer {
     }
     send(target, message, data, transferMode = message.getTransferMode()) {
         //this.sendRaw(target, this.messageIndex.createRaw(message, data), transferMode);
-        this.sendRaw(target, message.createRaw(data), transferMode);
+        this.sendRaw(target, this.createRaw(message, data), transferMode);
     }
     sendAll(message, data, transferMode = message.getTransferMode()) {
         //this.sendRawAll(this.messageDomain.createRaw(message, data), transferMode);
-        this.sendRawAll(message.createRaw(data), transferMode);
+        this.sendRawAll(this.createRaw(message, data), transferMode);
     }
     sendAllExcept(exclusions, message, data, transferMode = message.getTransferMode()) {
         //this.sendRawAllExcept(exclusions, this.messageIndex.createRaw(message, data), transferMode);
-        this.sendRawAllExcept(exclusions, message.createRaw(data), transferMode);
+        this.sendRawAllExcept(exclusions, this.createRaw(message, data), transferMode);
     }
 }
 exports.LocalMultiPeer = LocalMultiPeer;
 class RemotePeer extends Peer {
+    rawReceived = new signal_1.default();
+    //public localPeer: LocalMultiPeer;
+    groups = new Set(); // weakset?
     constructor() {
         super();
-        this.rawReceived = new signal_1.default();
-        //public localPeer: LocalMultiPeer;
-        this.groups = new Set(); // weakset?
         this.closed.connect(() => {
             for (const group of new Set(this.groups)) {
                 group.remove(this);
@@ -559,11 +631,9 @@ class RemotePeer extends Peer {
         return this.getStratumGroup(stratum) !== undefined;
     }
     getStratumGroup(stratum) {
-        for (const group of this.groups) {
-            if (stratum.has(group)) {
+        for (const group of this.groups)
+            if (stratum.has(group))
                 return group;
-            }
-        }
         return undefined;
     }
     handleGroupEntry(group) {
@@ -587,7 +657,19 @@ class RemotePeer extends Peer {
     }
 }
 exports.RemotePeer = RemotePeer;
+//export type GroupStratum<PeerType extends RemotePeer, GroupType extends Group<PeerType>> = Set<GroupType>;
 class Group {
+    dropped = new signal_1.default();
+    //public emptied = new Signal<void>();
+    //public filled = new Signal<void>();
+    peersAdded = new signal_1.default();
+    peersRemoved = new signal_1.default();
+    peersLeaving = new signal_1.default();
+    //protected stratum?: GroupStratum;
+    stratum;
+    capacity;
+    localPeer;
+    peerIndex = new RemotePeerIndex(); // weakset?
     //protected nextID = 0; // probably convert to an array of freed IDs
     //private tags = new Set<Symbol>();
     /*[Symbol.iterator] (): Iterator<PeerType> {
@@ -602,13 +684,6 @@ class Group {
         return this.peerIndex.ids;
     }
     constructor(localPeer, stratum) {
-        this.dropped = new signal_1.default();
-        //public emptied = new Signal<void>();
-        //public filled = new Signal<void>();
-        this.peersAdded = new signal_1.default();
-        this.peersRemoved = new signal_1.default();
-        this.peersLeaving = new signal_1.default();
-        this.peerIndex = new RemotePeerIndex(); // weakset?
         this.localPeer = localPeer;
         this.stratum = stratum;
     }
@@ -666,13 +741,12 @@ class Group {
     }
     ;
     remove(...peers) {
+        // Could probably stand to be optimized
         //let removed = peers.filter(this.has.bind(this));
         let removed = new Array();
-        for (const peer of peers) {
-            if (this.has(peer)) {
+        for (const peer of peers)
+            if (this.has(peer))
                 removed.push(peer);
-            }
-        }
         this.peersLeaving.emit(removed);
         for (const peer of removed)
             this.peers.delete(peer);

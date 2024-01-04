@@ -2,9 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ArrayMap = void 0;
 class ArrayMap {
-    constructor() {
-        this.map = new Map();
-    }
+    map = new Map();
     *entries() {
         for (const [key, valueArray] of this.map.entries())
             for (const value of valueArray)

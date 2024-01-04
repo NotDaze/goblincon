@@ -30,9 +30,10 @@ const signalingServer = new SignalingServer({ server: httpServer, clientTracking
 
 
 app.get("/", (req: express.Request, res: express.Response) => {
-	app.use(express.static(__dirname + "/Public"));
-	res.sendFile(__dirname + "/Public/index.html");
+	app.use(express.static(__dirname + "/Client"));
+	res.sendFile(__dirname + "/Client/index.html");
 });
+
 
 
 signalingServer.connected.connect(() => {

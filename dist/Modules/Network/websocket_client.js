@@ -6,9 +6,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const signal_1 = __importDefault(require("../Core/signal"));
 const network_1 = require("./network");
 class Socket extends network_1.LocalMonoPeer {
-    constructor(url, protocols, messageRoot = new network_1.MessageDomain(), messageHandler = new network_1.MessageHandler()) {
+    closed = new signal_1.default();
+    //public error = new Signal<void>();
+    ws;
+    constructor(messageRoot, url, protocols, messageHandler = new network_1.MessageHandler()) {
         super(messageRoot, messageHandler);
-        this.closed = new signal_1.default();
         this.ws = new WebSocket(url, protocols);
         this.ws.binaryType = "arraybuffer";
         this.ws.onopen = (e) => { this.state.set(network_1.ConnectionState.CONNECTED); };
@@ -18,7 +20,7 @@ class Socket extends network_1.LocalMonoPeer {
     }
     send(message, data) {
         //this.ws.send(this.messageRoot.createRaw(message, data));
-        this.ws.send(message.createRaw(data));
+        this.ws.send(this.createRaw(message, data));
     }
 }
 exports.default = Socket;

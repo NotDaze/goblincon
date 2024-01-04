@@ -25,7 +25,7 @@ export default class Socket extends LocalMonoPeer {
 	
 	private ws: WebSocket;
 	
-	constructor(url: string, protocols?: Array<string>, messageRoot = new MessageDomain(), messageHandler = new MessageHandler<void>()) {
+	constructor(messageRoot: MessageDomain, url: string, protocols?: Array<string>, messageHandler = new MessageHandler<void>()) {
 		
 		super(messageRoot, messageHandler);
 		
@@ -43,7 +43,7 @@ export default class Socket extends LocalMonoPeer {
 	
 	send(message: Message, data?: any): void {
 		//this.ws.send(this.messageRoot.createRaw(message, data));
-		this.ws.send(message.createRaw(data));
+		this.ws.send(this.createRaw(message, data));
 	}
 	
 	

@@ -3,14 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SignalListener = void 0;
 ;
 class SignalListener {
-    constructor() {
-        this.connections = new Map();
-    }
+    connections = new Map();
     register(signal, callback) {
-        var _a;
         if (!this.connections.has(signal))
             this.connections.set(signal, new Set());
-        (_a = this.connections.get(signal)) === null || _a === void 0 ? void 0 : _a.add(callback);
+        this.connections.get(signal)?.add(callback);
     }
     unregister(signal, callback) {
         let signalCallbacks = this.connections.get(signal);
@@ -41,6 +38,7 @@ class SignalListener {
 }
 exports.SignalListener = SignalListener;
 class Signal extends Set {
+    static DISCONNECT = Symbol();
     //private callbacks = new PrioritySet<(arg: ArgType) => any>();
     //private callbacks: Array<(arg: ArgType) => any> = [];
     //private callbacks = new Set<(arg: ArgType) => any>;
@@ -85,7 +83,6 @@ class Signal extends Set {
         }
     }
 }
-Signal.DISCONNECT = Symbol();
 exports.default = Signal;
 /*export default class Signal<ArgType> implements SignalLike<ArgType> { // Maybe make this extend set..?
     

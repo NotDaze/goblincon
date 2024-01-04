@@ -365,11 +365,11 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	
 	private fullyConnected = false;
 	
-	constructor(remoteClientClass: { new(): RemoteClientType }, serverUrl: string, protocols: Array<string> = [], messageRoot = new MessageDomain(), messageHandler = new MessageHandler<RemoteClientType>()) {
+	constructor(messageRoot: MessageDomain, remoteClientClass: { new(): RemoteClientType }, serverUrl: string, protocols: Array<string> = [], messageHandler = new MessageHandler<RemoteClientType>()) {
 		
 		super(messageRoot, messageHandler);
 		
-		this.socket = new SocketClient(serverUrl, protocols, SignalingMessages);
+		this.socket = new SocketClient(SignalingMessages, serverUrl, protocols);
 		this.clientClass = remoteClientClass;
 		
 		//console.log(this.socket.messageRoot);

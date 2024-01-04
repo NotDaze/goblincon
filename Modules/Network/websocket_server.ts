@@ -203,7 +203,7 @@ export class SocketServer<SocketType extends Socket> extends LocalMultiPeer<Sock
 	//protected socketCreation = new Signal<WebSocket>();
 	
 	
-	constructor(wssArgs = SocketServer.WSS_ARGS, socketClass: { new(ws: WebSocket): SocketType }, messageRoot = new MessageDomain()) {
+	constructor(messageRoot: MessageDomain, socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
 		
 		super(messageRoot);
 		

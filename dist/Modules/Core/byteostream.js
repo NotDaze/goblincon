@@ -17,6 +17,7 @@ class ByteOStream {
         }
         return out;
     }
+    segments;
     constructor(...segments) {
         this.segments = segments.slice();
     }

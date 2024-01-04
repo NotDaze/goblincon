@@ -12,12 +12,15 @@ const TEXT_DECODER = new TextDecoder();
 ;
 //import { joinByteArrays, ByteOStream, ByteIStream } from "../Core/byteistream"
 class HeaderFootprint {
+    iterations;
+    bytes;
     constructor(iterations, bytes) {
         this.iterations = iterations;
         this.bytes = bytes;
     }
 }
 class Arg {
+    static safe = true;
     static setSafe(newSafe) {
         this.safe = newSafe;
     }
@@ -236,6 +239,7 @@ class Arg {
     static optional(arg) {
         return Arg.default(arg, null);
     }
+    headerFootprint;
     constructor(headerFootprint) {
         this.headerFootprint = headerFootprint;
     }
@@ -258,10 +262,37 @@ class Arg {
         let bytes = stream.next(byteCount);
         return this.decode(bytes);
     }
+    /*static UINT1 = this.int(1, 0);
+    static UINT2 = this.int(2, 0);
+    static UINT4 = this.int(4, 0);
+    static UINT6 = this.int(6, 0);
+    
+    static INT1 = this.int(1, -128);
+    static INT2 = this.int(2, -32768);
+    static INT4 = this.int(4, -2147483648);
+    static INT6 = this.int(6, -281474976710656);
+    
+    static CHAR = this.str(0, 1);
+    static STRING1 = this.str(1, 1);
+    static STRING2 = this.str(2, 1);
+    
+    static BOOL = this.choice(false, true);*/
+    static UINT1;
+    static UINT2;
+    static UINT4;
+    static UINT6;
+    static INT1;
+    static INT2;
+    static INT4;
+    static INT6;
+    static CHAR;
+    static STRING1;
+    static STRING2;
+    static BOOL;
 }
-Arg.safe = true;
 exports.default = Arg;
 class ChoiceArg extends Arg {
+    choices;
     constructor(...choices) {
         super(new HeaderFootprint(0, Arg.calculateByteCount(choices.length)));
         this.choices = choices;
@@ -280,6 +311,8 @@ class ChoiceArg extends Arg {
     }
 }
 class IntArg extends Arg {
+    min;
+    max; // not inclusive
     constructor(byteCount, min = 0) {
         super(new HeaderFootprint(0, byteCount));
         this.min = min;
@@ -298,6 +331,9 @@ class IntArg extends Arg {
     }
 }
 class FloatArg extends Arg {
+    min;
+    max; // exclusive
+    precision;
     constructor(min, max, precision) {
         if (precision === undefined)
             precision = 0.01;
@@ -335,6 +371,7 @@ class StrArg extends Arg {
     }
 }
 class ArrayArg extends Arg {
+    arg;
     constructor(arg, byteCount = 2) {
         // special length header that tells how many copies of the sublist you get
         // also, this is certified black magic
@@ -375,6 +412,8 @@ class ArrayArg extends Arg {
     }
 }
 class DictArg extends Arg {
+    keyArg;
+    valueArg;
     constructor(keyArg, valueArg, byteCount = 2) {
         super(new HeaderFootprint(1, byteCount));
         this.keyArg = keyArg;
@@ -417,6 +456,7 @@ class DictArg extends Arg {
     }
 }
 class BranchArg extends Arg {
+    paths;
     constructor(paths, byteCount = 1) {
         super(new HeaderFootprint(1, byteCount));
         this.paths = Array.from(paths);
@@ -446,6 +486,8 @@ class BranchArg extends Arg {
     }
 }
 class ConstArg extends Arg {
+    value;
+    mandatory;
     constructor(value, mandatory = true) {
         super(new HeaderFootprint(0, 0));
         this.value = value;

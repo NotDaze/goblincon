@@ -49,62 +49,73 @@ export class Packet<PeerType extends RemotePeer | void> {
 	
 }
 
-export class MessageNode {
+class MessageNode {
 	
-	protected address: Uint8Array;
+	//protected address: Uint8Array;
 	
-	constructor(address: Uint8Array) {
+	/*constructor(address: Uint8Array) {
 		this.address = address;
-	}
+	}*/
 	
-	public findMessage(stream: ByteIStream): Message | null {
+	public findMessage(stream: ByteIStream): Message | undefined {
 		console.error("Overwrite MessageNode.findMessage()");
-		return null;
+		return undefined;
 	}
 	
-	packetToRaw() {
+	/*packetToRaw() {
 		
 	}
 	rawToPacket() {
 		
-	}
+	}*/
 	/*abstract createPacket<RemotePeerType extends RemotePeer>(peer: RemotePeerType, stream: ByteIStream): Packet {
 		
 	}*/
 	
 }
+
+
 export class MessageDomain extends MessageNode {
 	
-	private nodes = new IDIndex<MessageNode>();
+	//private nodes: Map<;
+	private nodes = new Array<MessageNode>();
 	private idByteCount: number;
 	
-	constructor(idByteCount = 2, address = new Uint8Array(), nodes: Iterable<MessageNode> = []) {
+	constructor(nodes: Iterable<MessageNode>, idByteCount = 1) {
 		
-		super(address);
+		//super(address);
+		super();
 		
 		this.idByteCount = idByteCount;
 		//this.nodes = Array.from(nodes);
 		
-		for (const node of nodes)
-			this.nodes.add(node);
+		this.nodes = Array.from(nodes);
 		
 	}
 	
-	public findMessage(stream: ByteIStream): Message | null {
+	*[Symbol.iterator] () {
+		
+		for (const node of this.nodes)
+			yield node;
+		
+	}
+	
+	public findMessage(stream: ByteIStream): Message | undefined {
 		
 		let id: number = Arg.decodeInt(stream.next(this.idByteCount));
-		let next: MessageNode | undefined = this.nodes.get(id);
+		let next: MessageNode | undefined = this.nodes[id];
 		
-		if (next == undefined) {
-			console.error("Invalid domain node ID: ", this.address, " | ", id, " | ", this.nodes.ids);
-			return null;
+		if (next === undefined) {
+			//console.error("Invalid domain node ID: ", this.address, " | ", id, " | ", this.nodes.ids);
+			console.error("Invalid domain node ID: ", id);
+			return undefined;
 		}
 		
 		return next.findMessage(stream);
 		
 	}
 	
-	private createNodeAddress(id = this.nodes.size): Uint8Array {
+	/*private createNodeAddress(id = this.nodes.size): Uint8Array {
 		
 		//let id = this.nodes.getNextID();
 		
@@ -117,7 +128,7 @@ export class MessageDomain extends MessageNode {
 			Arg.encodeInt(id, this.idByteCount)
 		);
 		
-	}
+	}*/
 	
 	//public addNode(node: MessageNode): void {}
 	
@@ -125,7 +136,7 @@ export class MessageDomain extends MessageNode {
 		return this.idByteCount;
 	}
 	
-	public newDomain(idByteCount = this.idByteCount): MessageDomain {
+	/*public newDomain(idByteCount = this.idByteCount): MessageDomain {
 		
 		let id = this.nodes.getNextID();
 		let domain = new MessageDomain(idByteCount, this.createNodeAddress(id));
@@ -136,17 +147,38 @@ export class MessageDomain extends MessageNode {
 		return domain;
 		
 	}
-	public newMessage(arg?: any, transferMode = TransferMode.RELIABLE): Message {
+	public newDomainClone(domain: MessageDomain): MessageDomain {
 		
 		let id = this.nodes.getNextID();
-		let message = new Message(this.createNodeAddress(id), arg, transferMode);
+		let newDomain = this.newDomain(domain.idByteCount);
+		
+		for (const node of domain.nodes) {
+			
+			if (node instanceof MessageDomain)
+				domain.newDomainClone(node);
+			else if (node instanceof Message)
+				domain.newMessageClone(node);
+			else
+				throw new Error("Unrecognized MessageNode (not a Message or Domain)");
+			
+		}
+		
+		return newDomain;
+		
+	}*/
+	
+	/*public newMessage(arg?: any, transferMode = TransferMode.RELIABLE): Message {
+		
+		let id = this.nodes.getNextID()
+		let message = new Message(this.createNodeAddress(id), arg, transferMode)
+		
 		this.nodes.add(message);
-		
-		//console.log("New message: ", id);
-		
 		return message;
 		
 	}
+	public newMessageClone(message: Message): Message {
+		return this.newMessage(message.arg, message.transferMode);
+	}*/
 	
 	/*public createRaw(): Uint8Array {
 		
@@ -175,7 +207,7 @@ export class MessageDomain extends MessageNode {
 		return out;*/
 		
 	//}
-	public createPackets<RemotePeerType extends RemotePeer | void>(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
+	/*public createPackets<RemotePeerType extends RemotePeer | void>(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
 		
 		//console.log(raw);
 		let stream = new ByteIStream(raw);
@@ -204,7 +236,7 @@ export class MessageDomain extends MessageNode {
 		stream.verifyExactComplete();
 		return packets;
 		
-	}
+	}*/
 	
 	
 }
@@ -218,21 +250,19 @@ export class Message extends MessageNode {
 	//static RAW = Symbol("RAW"); // maybe
 	
 	private arg: any;
-	private transferMode: TransferMode;
+	private transferMode: TransferMode; // Not sure this is actually necessary, but eh
 	//private conditions = new Array<(packet: Packet) => boolean>;
 	
-	constructor(address: Uint8Array, arg: any, transferMode = TransferMode.RELIABLE) {
+	constructor(arg?: any, transferMode = TransferMode.RELIABLE) {
 		
-		super(address);
-		
-		//console.log(address);
+		super();
 		
 		this.arg = arg;
 		this.transferMode = transferMode;
 		
 	}
 	
-	public findMessage(stream: ByteIStream): Message | null {
+	public findMessage(stream: ByteIStream): Message | undefined {
 		return this;
 	}
 	
@@ -253,20 +283,20 @@ export class Message extends MessageNode {
 		return Arg.streamDecode(this.arg, stream);
 	}
 	
-	public streamCreateRaw(data: any, stream: ByteOStream): void {
+	/*public streamCreateRaw(data: any, stream: ByteOStream): void {
 		
 		// Consider changing this - if an encoding error happens, the message address will still be written
 		stream.write(this.address);
 		this.streamEncode(data, stream);
 		
-	}
-	public createRaw(data: any): Uint8Array {
+	}*/
+	/*public createRaw(data: any): Uint8Array {
 		
 		let stream = new ByteOStream();
 		this.streamCreateRaw(data, stream);
 		return stream.bytes;
 		
-	}
+	}*/
 	
 }
 
@@ -275,8 +305,85 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 	static CONDITION_PASSED = 0;
 	static CONDITION_FAILED = 1;
 	
+	//private messageRoot: MessageDomain;
+	
+	//private addresses = new Map<Message, Uint8Array>();
+	
 	private conditions = new Map<Message, Set<(packet: Packet<RemotePeerType>) => string | void>>();
 	private signals = new Map<Message, Signal<Packet<RemotePeerType>>>();
+	
+	/*constructor(messageRoot: MessageDomain) {
+		
+		this.messageRoot = messageRoot;
+		this.indexAddresses(messageRoot);
+		
+	}
+	
+	private indexAddresses(node: MessageNode, address = new Uint8Array()): void {
+		
+		if (node instanceof MessageDomain) {
+			
+			let i = 0;
+			
+			for (const child of node) {
+				
+				this.indexAddresses(child, Arg.joinByteArrays(address, Arg.encodeInt(i, node.getIdByteCount())));
+				i++;
+				
+			}
+			
+		}
+		else if (node instanceof Message) {
+			this.addresses.set(node, address);
+		}
+		else {
+			// Throw?
+		}
+		
+	}
+	
+	createPackets(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
+		
+		//console.log(raw);
+		let stream = new ByteIStream(raw);
+		let packets = new Array<Packet<RemotePeerType>>();
+		
+		while (!stream.complete) {
+			
+			//let messageID = Arg.decodeInt(stream.next(this.idByteCount));
+			//let message = this.messages[messageID];
+			
+			let message = this.messageRoot.findMessage(stream);
+			
+			if (!message) {
+				console.error("Unrecognized Message | ", raw);
+				break;
+			}
+			
+			//packets.push(message.createPacket(stream));
+			
+			packets.push(
+				new Packet<RemotePeerType>(message, peer, message.streamDecode(stream))
+			);
+			
+		}
+		
+		stream.verifyExactComplete();
+		return packets;
+		
+	}
+	createRaw(message: Message, data: any, stream: ByteOStream): void {
+		
+		
+		
+	}
+	
+	hasMessage(message: Message): boolean {
+		return this.addresses.has(message);
+	}
+	getMessageAddress(message: Message): Uint8Array | undefined {
+		return this.addresses.get(message);
+	}*/
 	
 	hasMessageSignal(message: Message): boolean {
 		return this.signals.has(message);
@@ -298,9 +405,8 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		this.getMessageSignal(message).connect(callback);
 	}
 	removeCallback(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
-		if (this.hasMessageSignal(message)) {
+		if (this.hasMessageSignal(message))
 			this.getMessageSignal(message).disconnect(callback);
-		}
 	}
 	
 	addCondition(messages: Message | Iterable<Message>, condition: (packet: Packet<RemotePeerType>) => string | void): void {
@@ -542,16 +648,99 @@ class Peer {
 
 class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 	
-	public messageRoot: MessageDomain;
+	protected messageRoot: MessageDomain;
+	protected addresses = new Map<Message, Uint8Array>();
+	
 	protected messageHandler: MessageHandler<RemotePeerType>;
 	
-	constructor(messageRoot = new MessageDomain(2), messageHandler = new MessageHandler<RemotePeerType>()) {
+	constructor(messageRoot: MessageDomain, messageHandler = new MessageHandler<RemotePeerType>()) {
 		
 		super();
 		
 		this.messageRoot = messageRoot;
 		this.messageHandler = messageHandler;
 		
+		this.indexAddresses(messageRoot);
+		
+	}
+	
+	private indexAddresses(node: MessageNode, address = new Uint8Array()): void {
+		
+		if (node instanceof MessageDomain) {
+			
+			let i = 0;
+			
+			for (const child of node) {
+				
+				this.indexAddresses(child, Arg.joinByteArrays(address, Arg.encodeInt(i, node.getIdByteCount())));
+				i++;
+				
+			}
+			
+		}
+		else if (node instanceof Message) {
+			this.addresses.set(node, address);
+		}
+		else {
+			// Throw?
+		}
+		
+	}
+	
+	protected createPackets(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
+		
+		//console.log(raw);
+		let stream = new ByteIStream(raw);
+		let packets = new Array<Packet<RemotePeerType>>();
+		
+		while (!stream.complete) {
+			
+			//let messageID = Arg.decodeInt(stream.next(this.idByteCount));
+			//let message = this.messages[messageID];
+			
+			let message = this.messageRoot.findMessage(stream);
+			
+			if (!message) {
+				console.error("Unrecognized Message | ", raw);
+				break;
+			}
+			
+			//packets.push(message.createPacket(stream));
+			
+			packets.push(
+				new Packet<RemotePeerType>(message, peer, message.streamDecode(stream))
+			);
+			
+		}
+		
+		stream.verifyExactComplete();
+		return packets;
+		
+	}
+	protected streamCreateRaw(message: Message, data: any, stream: ByteOStream): void {
+		
+		let address = this.getMessageAddress(message);
+		
+		if (address === undefined)
+			throw new Error("Invalid message for LocalPeer.streamCreateRaw()");
+		
+		stream.write(address);
+		message.streamEncode(data, stream);
+		
+	}
+	protected createRaw(message: Message, data: any): Uint8Array {
+		
+		let stream = new ByteOStream();
+		this.streamCreateRaw(message, data, stream);
+		return stream.bytes;
+		
+	}
+	
+	hasMessage(message: Message): boolean {
+		return this.addresses.has(message);
+	}
+	getMessageAddress(message: Message): Uint8Array | undefined {
+		return this.addresses.get(message);
 	}
 	
 	//private handleRaw(peer: RemotePeer, raw: Uint8Array): void {
@@ -565,7 +754,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		this.messageHandler.handlePacket(packet);
 	}
 	protected handleRaw(peer: RemotePeerType, raw: Uint8Array): void {
-		this.handlePackets(this.messageRoot.createPackets(peer, raw));
+		this.handlePackets(this.createPackets(peer, raw));
 	}
 	
 	/*public newDomain(idByteCount = ) {
@@ -596,7 +785,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 export class LocalMonoPeer extends LocalPeer<void> {
 	
 	
-	constructor(messageRoot = new MessageDomain(2), messageHandler = new MessageHandler<void>()) {
+	constructor(messageRoot: MessageDomain, messageHandler = new MessageHandler<void>()) {
 		
 		super(messageRoot, messageHandler);
 		
@@ -751,15 +940,15 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 	
 	public send(target: RemotePeerType | Iterable<RemotePeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
 		//this.sendRaw(target, this.messageIndex.createRaw(message, data), transferMode);
-		this.sendRaw(target, message.createRaw(data), transferMode);
+		this.sendRaw(target, this.createRaw(message, data), transferMode);
 	}
 	public sendAll(message: Message, data?: any, transferMode = message.getTransferMode()): void {
 		//this.sendRawAll(this.messageDomain.createRaw(message, data), transferMode);
-		this.sendRawAll(message.createRaw(data), transferMode);
+		this.sendRawAll(this.createRaw(message, data), transferMode);
 	}
 	public sendAllExcept(exclusions: RemotePeerType | Iterable<RemotePeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
 		//this.sendRawAllExcept(exclusions, this.messageIndex.createRaw(message, data), transferMode);
-		this.sendRawAllExcept(exclusions, message.createRaw(data), transferMode);
+		this.sendRawAllExcept(exclusions, this.createRaw(message, data), transferMode);
 	}
 	
 	
@@ -799,13 +988,11 @@ export class RemotePeer extends Peer {
 	public hasStratumGroup(stratum: Set<Group<any>>): boolean {
 		return this.getStratumGroup(stratum) !== undefined;
 	}
-	public getStratumGroup(stratum: Set<Group<any>>): Group<any> | undefined {
+	public getStratumGroup<GroupType extends Group<any>>(stratum: Set<GroupType>): GroupType | undefined {
 		
-		for (const group of this.groups) {
-			if (stratum.has(group)) {
-				return group;
-			}
-		}
+		for (const group of this.groups)
+			if (stratum.has(group as GroupType))
+				return group as GroupType;
 		
 		return undefined;
 		
@@ -841,7 +1028,7 @@ export class RemotePeer extends Peer {
 	
 }
 
-
+//export type GroupStratum<PeerType extends RemotePeer, GroupType extends Group<PeerType>> = Set<GroupType>;
 export class Group<PeerType extends RemotePeer> {
 	
 	public dropped = new Signal<void>();
@@ -955,14 +1142,14 @@ export class Group<PeerType extends RemotePeer> {
 	};
 	public remove(...peers: Array<PeerType>): Array<PeerType> {
 		
+		// Could probably stand to be optimized
+		
 		//let removed = peers.filter(this.has.bind(this));
 		let removed = new Array<PeerType>();
 		
-		for (const peer of peers) {
-			if (this.has(peer)) {
+		for (const peer of peers)
+			if (this.has(peer))
 				removed.push(peer);
-			}
-		}
 		
 		this.peersLeaving.emit(removed);
 		

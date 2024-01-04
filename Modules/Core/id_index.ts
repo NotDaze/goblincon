@@ -40,15 +40,11 @@ export default class IDIndex<Type> {
 	protected freeID(id: number): void {
 		
 		if (id === this.highestID) { // Trim
-			
 			this.highestID--;
 			this.trim();
-			
 		}
 		else {
-			
 			SortedArray.insert(this.freeIDs, id);
-			
 		}
 		
 	}

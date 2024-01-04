@@ -5,10 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const sorted_array_1 = __importDefault(require("./sorted_array"));
 class PrioritySet {
-    constructor() {
-        this.map = new Map();
-        this.priorities = new Array();
-    }
+    map = new Map();
+    priorities = new Array();
     *[Symbol.iterator]() {
         for (const priority of this.priorities) {
             let values = this.map.get(priority);

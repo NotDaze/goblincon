@@ -127,6 +127,9 @@ const network_1 = require("./network");
 }
 */
 class Socket extends network_1.RemotePeer {
+    //public rawReceived = Signal.fromEvent(this, "message");
+    //public closed = Signal.fromEvent(this, "closed");
+    ws;
     constructor(ws) {
         super();
         this.ws = ws;
@@ -145,9 +148,16 @@ class Socket extends network_1.RemotePeer {
 }
 exports.Socket = Socket;
 class SocketServer extends network_1.LocalMultiPeer {
+    static WSS_ARGS = {
+        port: 5050,
+        clientTracking: false
+    };
+    //private webSocketConnected: Signal<WebSocket>;
+    //public sockets = new Set<Socket>();
+    wss;
     //private buffer = new ByteOStream();
     //protected socketCreation = new Signal<WebSocket>();
-    constructor(wssArgs = SocketServer.WSS_ARGS, socketClass, messageRoot = new network_1.MessageDomain()) {
+    constructor(messageRoot, socketClass, wssArgs = SocketServer.WSS_ARGS) {
         super(messageRoot);
         //this.messageIndex = messageIndex;
         this.wss = new ws_1.WebSocketServer(wssArgs);
@@ -162,10 +172,6 @@ class SocketServer extends network_1.LocalMultiPeer {
     }
 }
 exports.SocketServer = SocketServer;
-SocketServer.WSS_ARGS = {
-    port: 5050,
-    clientTracking: false
-};
 //const wss = new WebSocket.Server({ port: 5050, WebSocket: WebSocketClient });
 /*class Server {
     

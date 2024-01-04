@@ -23,15 +23,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -51,24 +42,24 @@ const signaling_1 = __importStar(require("./MessageIndices/signaling"));
     
 }*/
 class RemoteMeshClient extends network_1.RemotePeer {
+    sessionDescriptionCreated = new signal_1.default();
+    iceCandidateCreated = new signal_1.default();
+    //connectionReady = new Signal<void>();
+    //answerCreated = new Signal<RTCSessionDescription>();
+    //connectionReady = new Signal<void>();
+    connection = new RTCPeerConnection({
+        iceServers: [
+            {
+                urls: ["stun:stun.l.google.com:19302"]
+            }
+        ]
+    });
+    channels = new Map; // Overkill
     //private channelReliable = );
     //private channelUnreliable = );
     //private a = this.rtcConnection.createDataChannel()
     constructor() {
         super();
-        this.sessionDescriptionCreated = new signal_1.default();
-        this.iceCandidateCreated = new signal_1.default();
-        //connectionReady = new Signal<void>();
-        //answerCreated = new Signal<RTCSessionDescription>();
-        //connectionReady = new Signal<void>();
-        this.connection = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: ["stun:stun.l.google.com:19302"]
-                }
-            ]
-        });
-        this.channels = new Map; // Overkill
         this.channels.set(network_1.TransferMode.RELIABLE, this.createDataChannel("reliable", {
             id: 0,
             negotiated: true,
@@ -179,54 +170,48 @@ class RemoteMeshClient extends network_1.RemotePeer {
         // We're fully connected
         this.state.set(network_1.ConnectionState.CONNECTED);
     }
-    createOffer() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.state.any(network_1.ConnectionState.NEW, network_1.ConnectionState.DISCONNECTED)) {
-                console.log("Attempted to create offer for invalid peer.");
-                return;
-            }
-            this.state.set(network_1.ConnectionState.CONNECTING);
-            let offer = yield this.connection.createOffer({ /* iceRestart: true, */});
-            yield this.connection.setLocalDescription(offer);
-            /*if (this.connection.canTrickleIceCandidates === true)
-                this.sessionDescriptionCreated.emit(offer);
-            else
-                console.log("No trickling");*/
-            //console.log("Can Trickle: ", this.connection.canTrickleIceCandidates);
-            if (offer.sdp == undefined)
-                console.error("Failed offer creation.");
-            else
-                this.sessionDescriptionCreated.emit(offer);
-        });
+    async createOffer() {
+        if (!this.state.any(network_1.ConnectionState.NEW, network_1.ConnectionState.DISCONNECTED)) {
+            console.log("Attempted to create offer for invalid peer.");
+            return;
+        }
+        this.state.set(network_1.ConnectionState.CONNECTING);
+        let offer = await this.connection.createOffer({ /* iceRestart: true, */});
+        await this.connection.setLocalDescription(offer);
+        /*if (this.connection.canTrickleIceCandidates === true)
+            this.sessionDescriptionCreated.emit(offer);
+        else
+            console.log("No trickling");*/
+        //console.log("Can Trickle: ", this.connection.canTrickleIceCandidates);
+        if (offer.sdp == undefined)
+            console.error("Failed offer creation.");
+        else
+            this.sessionDescriptionCreated.emit(offer);
     }
-    setRemoteDescription(description) {
-        return __awaiter(this, void 0, void 0, function* () {
-            //type RTCSdpType = "answer" | "offer" | "pranswer" | "rollback";
-            if (this.state.is(network_1.ConnectionState.CONNECTED)) {
-                console.log("Received remote description for peer that is already connected.");
-                return;
-            }
-            if (description.type === "offer" && this.state.is(network_1.ConnectionState.CONNECTING)) {
-                console.log("Received remote offer for peer that is already connecting.");
-                return;
-            }
-            this.state.set(network_1.ConnectionState.CONNECTING);
-            yield this.connection.setRemoteDescription(description);
-            if (description.type === "offer") {
-                let answer = yield this.connection.createAnswer();
-                yield this.connection.setLocalDescription(answer);
-                this.sessionDescriptionCreated.emit(answer);
-            }
-        });
+    async setRemoteDescription(description) {
+        //type RTCSdpType = "answer" | "offer" | "pranswer" | "rollback";
+        if (this.state.is(network_1.ConnectionState.CONNECTED)) {
+            console.log("Received remote description for peer that is already connected.");
+            return;
+        }
+        if (description.type === "offer" && this.state.is(network_1.ConnectionState.CONNECTING)) {
+            console.log("Received remote offer for peer that is already connecting.");
+            return;
+        }
+        this.state.set(network_1.ConnectionState.CONNECTING);
+        await this.connection.setRemoteDescription(description);
+        if (description.type === "offer") {
+            let answer = await this.connection.createAnswer();
+            await this.connection.setLocalDescription(answer);
+            this.sessionDescriptionCreated.emit(answer);
+        }
     }
-    addRemoteIceCandidate(candidate) {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.state.is(network_1.ConnectionState.CONNECTING)) {
-                //console.log("Received remote ice candidate for peer that isn't connecting.");
-                //console.log(candidate);
-            }
-            yield this.connection.addIceCandidate(candidate);
-        });
+    async addRemoteIceCandidate(candidate) {
+        if (!this.state.is(network_1.ConnectionState.CONNECTING)) {
+            //console.log("Received remote ice candidate for peer that isn't connecting.");
+            //console.log(candidate);
+        }
+        await this.connection.addIceCandidate(candidate);
     }
     ;
     createDataChannel(label, init) {
@@ -235,10 +220,10 @@ class RemoteMeshClient extends network_1.RemotePeer {
         return channel;
     }
     initDataChannel(channel) {
-        channel.onmessage = (ev) => __awaiter(this, void 0, void 0, function* () {
+        channel.onmessage = async (ev) => {
             console.log("Message! ", ev.data);
             if (ev.data instanceof Blob) {
-                this.handleRaw(new Uint8Array(yield ev.data.arrayBuffer()));
+                this.handleRaw(new Uint8Array(await ev.data.arrayBuffer()));
             }
             else if (ev.data instanceof ArrayBuffer) {
                 this.handleRaw(new Uint8Array(ev.data));
@@ -246,7 +231,7 @@ class RemoteMeshClient extends network_1.RemotePeer {
             else {
                 console.log("Invalid RTCDataChannel Message: ", ev.data);
             }
-        });
+        };
         channel.onopen = (ev) => {
             console.log("Channel opened!");
             this.checkConnected();
@@ -271,11 +256,16 @@ class RemoteMeshClient extends network_1.RemotePeer {
 }
 exports.RemoteMeshClient = RemoteMeshClient;
 class LocalMeshClient extends network_1.LocalMultiPeer {
-    constructor(remoteClientClass, serverUrl, protocols = [], messageRoot = new network_1.MessageDomain(), messageHandler = new network_1.MessageHandler()) {
+    //statusUpdate = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
+    //stabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>]>();
+    //destabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
+    socket;
+    clientClass;
+    stable = false;
+    fullyConnected = false;
+    constructor(messageRoot, remoteClientClass, serverUrl, protocols = [], messageHandler = new network_1.MessageHandler()) {
         super(messageRoot, messageHandler);
-        this.stable = false;
-        this.fullyConnected = false;
-        this.socket = new websocket_client_1.default(serverUrl, protocols, signaling_1.default);
+        this.socket = new websocket_client_1.default(signaling_1.default, serverUrl, protocols);
         this.clientClass = remoteClientClass;
         //console.log(this.socket.messageRoot);
         //console.log(this.socket.messageRoot.findMessage(new ByteIStream(new Uint8Array([8, 0]))))
@@ -387,16 +377,14 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         });
         this.socket.onMessage(signaling_1.MESH_SESSION_DESCRIPTION_CREATED, (packet) => {
             //console.log(packet.data);
-            var _a;
-            (_a = this.getPeer(packet.data.peerID)) === null || _a === void 0 ? void 0 : _a.setRemoteDescription({
+            this.getPeer(packet.data.peerID)?.setRemoteDescription({
                 type: packet.data.type,
                 sdp: packet.data.sdp
             });
         });
         this.socket.onMessage(signaling_1.MESH_ICE_CANDIDATE_CREATED, (packet) => {
             //console.log(packet.data);
-            var _a;
-            (_a = this.getPeer(packet.data.peerID)) === null || _a === void 0 ? void 0 : _a.addRemoteIceCandidate({
+            this.getPeer(packet.data.peerID)?.addRemoteIceCandidate({
                 candidate: packet.data.candidate,
                 sdpMid: packet.data.sdpMid,
                 sdpMLineIndex: packet.data.sdpMLineIndex,

@@ -1,6 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 class Color {
+    r;
+    g;
+    b;
+    a;
+    string;
     /*static rgba(r: number, g: number, b: number, a: number) {
         return new Color(r, g, b, a);
     }

@@ -30,8 +30,16 @@ exports.RemoteGameClient = void 0;
 const network_1 = require("./Network/network");
 const mesh_client_1 = __importStar(require("./Network/mesh_client"));
 const arg_1 = __importDefault(require("./Network/arg"));
-const MessageRoot = new network_1.MessageDomain();
-const TEST = MessageRoot.newMessage(arg_1.default.STRING2);
+const TEST = new network_1.Message(arg_1.default.STRING2);
+const MESSAGE_ROOT = new network_1.MessageDomain([
+    TEST
+]);
+//const TEST = MessageRoot.newMessage(Arg.STRING2);
+// Host creates game (via server)
+// Server generates a token
+// Server gives token to host
+// Clients connect to server
+// 
 class RemoteGameClient extends mesh_client_1.RemoteMeshClient {
     constructor() {
         super();
@@ -40,7 +48,7 @@ class RemoteGameClient extends mesh_client_1.RemoteMeshClient {
 exports.RemoteGameClient = RemoteGameClient;
 class LocalGameClient extends mesh_client_1.default {
     constructor(serverUrl, protocols = []) {
-        super(RemoteGameClient, serverUrl, protocols, MessageRoot, new network_1.MessageHandler);
+        super(MESSAGE_ROOT, RemoteGameClient, serverUrl, protocols, new network_1.MessageHandler);
         this.connected.connect(() => {
             this.sendAll(TEST, "Hello world!");
         });

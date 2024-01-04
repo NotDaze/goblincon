@@ -7,10 +7,10 @@ module.exports = {
 	
 	mode: "none",
 	
-	entry: "./dist/Public/index.js",
+	entry: "./dist/Client/index.js",
 	output: {
 		filename: "index.js",
-		path: path.resolve(__dirname, "dist/Public/"),
+		path: path.resolve(__dirname, "dist/Client/"),
 	},
 	
 };

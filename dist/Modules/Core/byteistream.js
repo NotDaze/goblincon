@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 class ByteIStream {
+    bytes;
+    index = 0;
     constructor(bytes) {
-        this.index = 0;
         this.bytes = bytes;
         //this.index = 0;
     }

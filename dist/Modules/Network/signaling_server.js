@@ -29,6 +29,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SignalingSocket = void 0;
 const state_1 = __importDefault(require("../Core/state"));
 const signal_1 = __importDefault(require("../Core/signal"));
+//import Arg from "./arg"
 const network_1 = require("./network");
 const websocket_server_1 = require("./websocket_server");
 const signaling_1 = __importStar(require("./MessageIndices/signaling"));
@@ -118,6 +119,15 @@ MESSAGE_INDEX.addCondition( // SDP/ICE forward has room and valid target //
     
 }*/
 class Mesh extends network_1.Group {
+    //public started = new Signal<void>();
+    stabilized = new signal_1.default();
+    destabilized = new signal_1.default();
+    disconnected = new signal_1.default();
+    state = new state_1.default(network_1.ConnectionState.NEW);
+    peerIndex = new network_1.RemotePeerIndex();
+    //private nodeIndex = new Map<number, SignalingSocket>();
+    stable = false;
+    startThreshold = 2;
     get ids() {
         return this.peerIndex.ids;
     }
@@ -126,15 +136,6 @@ class Mesh extends network_1.Group {
     }*/
     constructor(localPeer, stratum) {
         super(localPeer, stratum);
-        //public started = new Signal<void>();
-        this.stabilized = new signal_1.default();
-        this.destabilized = new signal_1.default();
-        this.disconnected = new signal_1.default();
-        this.state = new state_1.default(network_1.ConnectionState.NEW);
-        this.peerIndex = new network_1.RemotePeerIndex();
-        //private nodeIndex = new Map<number, SignalingSocket>();
-        this.stable = false;
-        this.startThreshold = 2;
         this.capacity = 4;
         this.peersAdded.connect((peers) => {
             for (const peer of peers) {
@@ -323,11 +324,11 @@ class Mesh extends network_1.Group {
     }
 }
 class SignalingSocket extends websocket_server_1.Socket {
+    meshID = -1;
+    stable = false;
+    connectionStates = new Map();
     constructor(ws) {
         super(ws);
-        this.meshID = -1;
-        this.stable = false;
-        this.connectionStates = new Map();
     }
     hasMeshID() {
         return this.meshID >= 0;
@@ -380,13 +381,13 @@ class SignalingSocket extends websocket_server_1.Socket {
 }
 exports.SignalingSocket = SignalingSocket;
 class SignalingServer extends websocket_server_1.SocketServer {
+    //static MESSAGE_INDEX = new MessageIndex();
+    //private matches = new Array<Mesh>();
+    meshes = new Set();
     constructor(wssArgs = websocket_server_1.SocketServer.WSS_ARGS, socketClass) {
         //let b = SignalingSocket;
         //let a = new b();
-        super(wssArgs, socketClass, signaling_1.default);
-        //static MESSAGE_INDEX = new MessageIndex();
-        //private matches = new Array<Mesh>();
-        this.meshes = new Set();
+        super(signaling_1.default, socketClass, wssArgs);
         this.peerConnected.connect((peer) => {
             this.findMesh(peer).add(peer);
         });
@@ -408,14 +409,14 @@ class SignalingServer extends websocket_server_1.SocketServer {
             let mesh = this.getPeerMesh(packet.peer);
             //if (!mesh)
             //	return "Invalid SDP/ICE peer.";
-            let target = mesh === null || mesh === void 0 ? void 0 : mesh.getPeer(packet.data.peerID);
+            let target = mesh?.getPeer(packet.data.peerID);
             if (!target)
                 return "Invalid SDP/ICE transport request.";
             // verify that they aren't already connected, maybe
         });
         this.onMessage(signaling_1.MESH_CLIENT_STATUS_UPDATE, (packet) => {
             let mesh = this.getPeerMesh(packet.peer);
-            mesh === null || mesh === void 0 ? void 0 : mesh.handleConnectionStatusUpdate(packet.peer, packet.data
+            mesh?.handleConnectionStatusUpdate(packet.peer, packet.data
             /*[
                 packet.data.pendingIDs,
                 packet.data.connectedIDs,
@@ -425,7 +426,6 @@ class SignalingServer extends websocket_server_1.SocketServer {
         });
         this.onMessage(signaling_1.MESH_SESSION_DESCRIPTION_CREATED, (packet) => {
             // peerID, type, sdp
-            var _a;
             /*let mesh = this.getPeerMesh(packet.peer);
             
             if (!mesh)
@@ -437,7 +437,7 @@ class SignalingServer extends websocket_server_1.SocketServer {
                 return;*/
             //console.log(packet.data);
             //console.log("SDP: ", packet.peer.getMeshID(), " -> ", packet.data.peerID);
-            let target = (_a = this.getPeerMesh(packet.peer)) === null || _a === void 0 ? void 0 : _a.getPeer(packet.data.peerID);
+            let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID);
             this.send(target, signaling_1.MESH_SESSION_DESCRIPTION_CREATED, {
                 peerID: packet.peer.getMeshID(),
                 type: packet.data.type,
@@ -446,7 +446,6 @@ class SignalingServer extends websocket_server_1.SocketServer {
         });
         this.onMessage(signaling_1.MESH_ICE_CANDIDATE_CREATED, (packet) => {
             // peerID, media, index, name
-            var _a;
             /*let mesh = this.getPeerMesh(packet.peer);
             
             if (!mesh)
@@ -456,7 +455,7 @@ class SignalingServer extends websocket_server_1.SocketServer {
             
             if (!target)
                 return;*/
-            let target = (_a = this.getPeerMesh(packet.peer)) === null || _a === void 0 ? void 0 : _a.getPeer(packet.data.peerID);
+            let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID);
             //console.log("ICE: ", packet.peer.getMeshID(), " -> ", packet.data.peerID);
             this.send(target, signaling_1.MESH_ICE_CANDIDATE_CREATED, {
                 peerID: packet.peer.getMeshID(),
@@ -481,11 +480,9 @@ class SignalingServer extends websocket_server_1.SocketServer {
         return mesh;
     }
     findMesh(socket) {
-        for (const mesh of this.meshes) {
-            if (mesh.isJoinable()) {
+        for (const mesh of this.meshes)
+            if (mesh.isJoinable())
                 return mesh;
-            }
-        }
         return this.createMesh();
     }
     getPeerMesh(socket) {

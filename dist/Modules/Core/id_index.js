@@ -5,13 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const sorted_array_1 = __importDefault(require("./sorted_array"));
 class IDIndex {
-    constructor() {
-        this.map = new Map();
-        this.ids = new Set();
-        this.values = new Set();
-        this.highestID = -1;
-        this.freeIDs = new Array();
-    }
+    map = new Map();
+    ids = new Set();
+    values = new Set();
+    highestID = -1;
+    freeIDs = new Array();
     *[Symbol.iterator]() {
         for (const value of this.map.values())
             yield value;

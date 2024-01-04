@@ -1,9 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 class Vector2 {
+    x = 0;
+    y = 0;
+    static ZERO = new Vector2(0, 0);
+    static UP = new Vector2(0, -1);
+    static DOWN = new Vector2(0, 1);
+    static LEFT = new Vector2(-1, 0);
+    static RIGHT = new Vector2(1, 0);
     constructor(x = 0, y = 0) {
-        this.x = 0;
-        this.y = 0;
         this.x = x;
         this.y = y;
     }
@@ -94,9 +99,4 @@ class Vector2 {
         return this.set(this.x + f * (v.x - this.x), this.y + f * (v.y - this.y));
     }
 }
-Vector2.ZERO = new Vector2(0, 0);
-Vector2.UP = new Vector2(0, -1);
-Vector2.DOWN = new Vector2(0, 1);
-Vector2.LEFT = new Vector2(-1, 0);
-Vector2.RIGHT = new Vector2(1, 0);
 exports.default = Vector2;

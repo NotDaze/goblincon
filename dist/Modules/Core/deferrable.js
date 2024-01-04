@@ -27,6 +27,9 @@ var State;
     
 }*/
 class Deferrable {
+    res;
+    rej;
+    promise;
     constructor() {
         this.promise = new Promise((res, rej) => {
             this.res = res;

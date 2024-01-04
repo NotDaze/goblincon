@@ -5,7 +5,7 @@ import State from "../Core/state"
 import Signal from "../Core/signal"
 
 import { WebSocket } from "ws"
-import Arg from "./arg"
+//import Arg from "./arg"
 import {
 	
 	ConnectionState,
@@ -315,7 +315,6 @@ class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
 		return this.state.any(ConnectionState.NEW, ConnectionState.CONNECTING, ConnectionState.CONNECTED) && !this.isFull();
 	}
 	
-	
 	public canInitialize(): boolean {
 		return this.state.is(ConnectionState.NEW) && this.getPeerCount() >= this.startThreshold;
 	}
@@ -431,16 +430,16 @@ class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
 		// maybe verify that the match has all the provided IDs
 		
 	}
-
+	
 }
 
 
 export class SignalingSocket extends Socket {
 	
-	private meshID = -1;
-	private stable = false;
+	protected meshID = -1;
+	protected stable = false;
 	
-	private connectionStates = new Map<SignalingSocket, ConnectionState>();
+	protected connectionStates = new Map<SignalingSocket, ConnectionState>();
 	
 	constructor(ws: WebSocket) {
 		super(ws);
@@ -509,7 +508,6 @@ export class SignalingSocket extends Socket {
 		
 	}
 	
-	
 }
 
 export default class SignalingServer<SocketType extends SignalingSocket = SignalingSocket> extends SocketServer<SocketType> {
@@ -517,7 +515,7 @@ export default class SignalingServer<SocketType extends SignalingSocket = Signal
 	//static MESSAGE_INDEX = new MessageIndex();
 	
 	//private matches = new Array<Mesh>();
-	private meshes = new Set<Mesh<SocketType>>();
+	protected meshes = new Set<Mesh<SocketType>>();
 	
 	
 	constructor(wssArgs = SocketServer.WSS_ARGS, socketClass: { new(ws: WebSocket): SocketType }) {
@@ -525,7 +523,7 @@ export default class SignalingServer<SocketType extends SignalingSocket = Signal
 		//let b = SignalingSocket;
 		//let a = new b();
 		
-		super(wssArgs, socketClass, SignalingMessages);
+		super(SignalingMessages, socketClass, wssArgs);
 		
 		this.peerConnected.connect((peer: SocketType) => {
 			this.findMesh(peer).add(peer);
@@ -663,18 +661,16 @@ export default class SignalingServer<SocketType extends SignalingSocket = Signal
 	}
 	public findMesh(socket: SignalingSocket): Mesh<SocketType> {
 		
-		for (const mesh of this.meshes) {
-			if (mesh.isJoinable()) {
+		for (const mesh of this.meshes)
+			if (mesh.isJoinable())
 				return mesh;
-			}
-		}
 		
 		return this.createMesh();
 		
 	}
 	
 	public getPeerMesh(socket: SignalingSocket): Mesh<SocketType> | undefined {
-		return socket.getStratumGroup(this.meshes) as Mesh<SocketType> | undefined;
+		return socket.getStratumGroup(this.meshes);
 	}
 	
 }

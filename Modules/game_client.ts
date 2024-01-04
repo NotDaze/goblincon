@@ -19,10 +19,18 @@ import {
 import LocalMeshClient, { RemoteMeshClient } from "./Network/mesh_client"
 import Arg from "./Network/arg"
 
+const TEST = new Message(Arg.STRING2);
+const MESSAGE_ROOT = new MessageDomain([
+	TEST
+]);
 
-const MessageRoot = new MessageDomain();
+//const TEST = MessageRoot.newMessage(Arg.STRING2);
 
-const TEST = MessageRoot.newMessage(Arg.STRING2);
+// Host creates game (via server)
+// Server generates a token
+// Server gives token to host
+// Clients connect to server
+// 
 
 export class RemoteGameClient extends RemoteMeshClient {
 	
@@ -38,7 +46,7 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	
 	constructor(serverUrl: string, protocols: Array<string> = []) {
 		
-		super(RemoteGameClient, serverUrl, protocols, MessageRoot, new MessageHandler<RemoteGameClient>);
+		super(MESSAGE_ROOT, RemoteGameClient, serverUrl, protocols, new MessageHandler<RemoteGameClient>);
 		
 		this.connected.connect(() => {
 			
