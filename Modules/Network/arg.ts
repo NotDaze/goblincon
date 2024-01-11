@@ -11,8 +11,44 @@ const TEXT_DECODER = new TextDecoder();
 
 
 interface DynamicObject { [key: string]: any };
+type ArgMap<T> = { [key in keyof T]: ArgLike<T[key]> };
+export type ArgLike<T> = Arg<T> | ArgMap<T>;
+
+//type Unarg<> = T;
+//type FlattenArg<T extends ArgLike> = T extends Arg<infer ArgT> ? ArgT : T;
+
+
+
+//type ArgLike<T> = (T extends Arg<infer ArgT> ? ArgT : T);
+
+
+
+/*type FlattenArgLike<T extends ArgLike> = (
+	T extends Arg<infer ArgT> ? ArgT : (
+	T extends ArgMap<infer ArgMapT> ? ArgMapT : never
+)*/
+//type ArgLike<T> = ArgMap<T> | Arg<T>;
+
+//type ArgTuple<T> = Array<ArgLike>;
+//type ArgMap = { [key: string]: ArgLike }
+//type ArgValue<T extends ArgLike> = T extends Arg;
+
+//type ArgMap = Record<string, ArgLike>
+
+
+//type ArgValue<Arg<T>> = 
+
+//type ArgValue
+
+//type ArgLike<T> = ArgMap<T>
+
+//type ArgMap<T extends DynamicObject> = { [key: string]: string }
+
+//[ Arg.STR1, Arg.INT1 ] => [string, number]
 
 //import { joinByteArrays, ByteOStream, ByteIStream } from "../Core/byteistream"
+
+
 
 class ArgLength {
 	
@@ -34,14 +70,42 @@ class ArgLength {
 	
 }
 
-export default class Arg {
+export default class Arg<T> {
 	
-	static safe: boolean = true;
+	protected length: ArgLength;
 	
-	static setSafe(newSafe: boolean): void {
-		this.safe = newSafe;
+	constructor(length: ArgLength) {
+		this.length = length;
 	}
-
+	
+	public matches(value: any): boolean {
+		console.error("Override Arg.matches");
+		return false;
+	}
+	
+	public encode(value: T): Uint8Array {
+		console.error("Override Arg.encode");
+		return new Uint8Array();
+	}
+	public streamEncode(value: T, stream: ByteOStream): void {
+		stream.write(this.encode(value));
+	}
+	
+	public decode(bytes: Iterable<number>): T {
+		throw new Error("Override Arg.decode (unless only using Arg.streamDecode)");
+		//return undefined as T; // This is a hack, but probably a necessary one?
+	}
+	public streamDecode(stream: ByteIStream): T {
+		
+		let byteCount = Arg.resolveHeader(stream, this.length);
+		let bytes = stream.next(byteCount);
+		return this.decode(bytes);
+		
+	}
+	
+	
+	//static safe: boolean = true;
+	
 	static calculateByteCount(choiceCount: number): number {
 		//return Math.max(1, );
 		return Math.ceil(Math.log(choiceCount) / LOG256);
@@ -156,7 +220,7 @@ export default class Arg {
 		
 	}
 	
-	static matches(arg: any, value: any) {
+	static matches(arg: ArgLike<any>, value: any): boolean {
 		
 		if (arg == null) {
 			return value == null;
@@ -190,7 +254,7 @@ export default class Arg {
 		}
 		
 	}
-	static matchesAll(arg: any, values: Iterable<any>): boolean {
+	static matchesAll(arg: ArgLike<any>, values: Iterable<any>): boolean {
 		
 		for (const value of values) {
 			
@@ -202,11 +266,10 @@ export default class Arg {
 		return true;
 		
 	}
-	static streamEncodeAll(arg: any, values: Iterable<any>, stream: ByteOStream): void {
+	static streamEncodeAll<T>(arg: ArgLike<T>, values: Iterable<T>, stream: ByteOStream): void {
 		
-		for (const value of values) {
+		for (const value of values)
 			Arg.streamEncode(arg, value, stream);
-		}
 		
 	}
 	
@@ -263,24 +326,51 @@ export default class Arg {
 	static decode(arg: any, bytes: Uint8Array): any {
 		return this.streamDecode(arg, new ByteIStream(bytes));
 	}
-	static streamDecodeSafe(arg : any, stream : ByteIStream) {
+	static streamDecodeSafe<T>(arg: ArgLike<T>, stream: ByteIStream): T {
 		
-		let decoded = this.streamDecode(arg, stream);
+		let decoded = this.streamDecode<T>(arg, stream);
 		stream.verifyExactComplete();
 		return decoded;
 		
 	}
-	static streamDecode(arg: any, stream: ByteIStream): any {
+	static streamDecode<T>(arg: ArgLike<T>, stream: ByteIStream): T {
 		
-		if (arg == null) {
-			return null;
-		}
-		else if (arg instanceof Arg) {
-			
+		/*if (arg === undefined) {
+			return undefined;
+		}*/
+		if (arg instanceof Arg) {
 			return arg.streamDecode(stream);
+		}
+		
+		else {
+			
+			//let decoded = {} as T;
+			
+			if (Array.isArray(arg)) {
+				
+				let decoded = [];
+				
+				for (const subarg of arg)
+					decoded.push(this.streamDecode(subarg, stream));
+				
+				return decoded as T;
+				
+			}
+			
+			else {
+				
+				let decoded = {} as DynamicObject;
+				
+				for (const key in arg)
+					decoded[key] = this.streamDecode(arg[key], stream);
+				
+				return decoded as T;
+				
+			}
 			
 		}
-		else if (arg instanceof Array) {
+		
+		/*else if (arg instanceof Array) {
 			
 			let decoded = new Array<any>();
 			
@@ -299,7 +389,7 @@ export default class Arg {
 			
 			return decoded;
 			
-		}
+		}*/
 		
 	}
 	
@@ -336,58 +426,32 @@ export default class Arg {
 	static choice<T>(...choices: Array<T>): ChoiceArg<T> {
 		return new ChoiceArg<T>(...choices);
 	}
-	static array(arg: any, byteCount : number = 2): ArrayArg {
+	static array<T>(arg: Arg<T>, byteCount : number = 2): ArrayArg<T> {
 		return new ArrayArg(arg, byteCount);
 	}
-	static arrayShort() {
-		
+	static arrayShort<T>(arg: Arg<T>) {
+		return Arg.array(arg, 1);
 	}
-	static branch(...paths : Array<any>): BranchArg {
+	static arrayLong<T>(arg: Arg<T>) {
+		return Arg.array(arg, 2);
+	}
+	
+	
+	static branch<T>(...paths : Array<ArgLike<any>>): BranchArg<T> {
 		return new BranchArg(paths);
 	}
-	static const(value: any): ConstArg {
+	static const<T>(value: T): ConstArg<T> {
 		return new ConstArg(value, true);
 	}
-	static auto(value: any): ConstArg {
+	static auto<T>(value: T): ConstArg<T> {
 		return new ConstArg(value, false);
 	}
-	static default(arg: Arg, fallback: any): BranchArg {
+	static default<T>(arg: Arg<T>, fallback: T): BranchArg<T> {
 		return new BranchArg([ new ConstArg(fallback, false), arg ]);
 	}
-	static optional(arg: Arg): BranchArg {
-		return Arg.default(arg, null);
+	static optional<T>(arg: Arg<T>): BranchArg<T | undefined> {
+		return Arg.default<T | undefined>(arg, undefined);
 	}
-	
-	protected length: ArgLength;
-	
-	constructor(length: ArgLength) {
-		this.length = length;
-	}
-	
-	public matches(value: any): boolean {
-		console.error("Override Arg.matches");
-		return false;
-	}
-	
-	public encode(value: any): Uint8Array {
-		console.error("Override Arg.encode");
-		return new Uint8Array();
-	}
-	public streamEncode(value: any, stream: ByteOStream): void {
-		stream.write(this.encode(value));
-	}
-	
-	public decode(bytes: Iterable<number>): any {
-		console.error("Override Arg.decode");
-	}
-	public streamDecode(stream: ByteIStream): any {
-		
-		let byteCount = Arg.resolveHeader(stream, this.length);
-		let bytes = stream.next(byteCount);
-		return this.decode(bytes);
-		
-	}
-	
 	
 	/*static UINT1 = this.int(1, 0);
 	static UINT2 = this.int(2, 0);
@@ -426,10 +490,12 @@ export default class Arg {
 	
 	static BOOL: ChoiceArg<boolean>;
 	
+	static NONE: ConstArg<undefined>;
+	
 }
 
 
-class RawArg extends Arg {
+class RawArg extends Arg<Uint8Array> {
 	
 	static fixed(bytes: number) {
 		return new RawArg(ArgLength.fixed(bytes));
@@ -457,10 +523,8 @@ class RawArg extends Arg {
 		return 
 	}*/
 	
-	
-	
 }
-class ChoiceArg<T> extends Arg {
+class ChoiceArg<T> extends Arg<T> {
 	
 	private choices: Array<T>;
 	
@@ -486,7 +550,7 @@ class ChoiceArg<T> extends Arg {
 	}
 	
 }
-class IntArg extends Arg {
+class IntArg extends Arg<number> {
 	
 	private min: number;
 	private max: number; // not inclusive
@@ -516,7 +580,7 @@ class IntArg extends Arg {
 	}
 	
 }
-class FloatArg extends Arg {
+class FloatArg extends Arg<number> {
 	
 	private min: number;
 	private max: number; // exclusive
@@ -548,7 +612,7 @@ class FloatArg extends Arg {
 	}
 	
 }
-class StrArg extends Arg {
+class StrArg extends Arg<string> {
 	
 	static fixed(bytes: number): StrArg {
 		return new StrArg(ArgLength.fixed(bytes));
@@ -574,7 +638,7 @@ class StrArg extends Arg {
 	}
 	
 }
-class ArrayArg extends Arg {
+class ArrayArg<T> extends Arg<Array<T>> {
 	
 	private arg: any;
 	
@@ -605,17 +669,13 @@ class ArrayArg extends Arg {
 		//return Arg.joinByteArrays([ header, encoded ]);
 		
 	}*/
-	public streamEncode(values : Array<any> | Set<any>, stream : ByteOStream): void {
+	public streamEncode(values : Array<T>, stream : ByteOStream): void {
 		
-		stream.write(Arg.createHeader(this.length, Array.isArray(values) ? values.length : values.size));
-		
-		//for (const value of values)
-		//	Arg.streamEncode(this.arg, value, stream);
-		
+		stream.write(Arg.createHeader(this.length, values.length));
 		Arg.streamEncodeAll(this.arg, values, stream);
 		
 	}
-	public streamDecode(stream: ByteIStream): Array<any> {
+	public streamDecode(stream: ByteIStream): Array<T> {
 		
 		return Arg.streamDecodeAll(
 			this.arg,
@@ -634,12 +694,12 @@ class ArrayArg extends Arg {
 	}
 	
 }
-class DictArg extends Arg {
+class DictArg<Key extends keyof any, Value> extends Arg<Record<Key, Value>> {
 	
-	private keyArg: any;
-	private valueArg: any;
+	private keyArg: Arg<Key>;
+	private valueArg: Arg<Value>;
 	
-	constructor(keyArg: any, valueArg: any, byteCount = 2) {
+	constructor(keyArg: Arg<Key>, valueArg: Arg<Value>, byteCount = 2) {
 		
 		super(new ArgLength(1, byteCount));
 		
@@ -660,8 +720,6 @@ class DictArg extends Arg {
 	}
 	
 	public streamEncode(obj: Map<any, any> | DynamicObject, stream : ByteOStream): void {
-		
-		
 		
 		if (obj instanceof Map) {
 			
@@ -687,10 +745,11 @@ class DictArg extends Arg {
 		}
 		
 	}
-	public streamDecode(stream: ByteIStream): DynamicObject {
+	public streamDecode(stream: ByteIStream): Record<Key, Value> {
 		
 		let valueCount = Arg.resolveHeader(stream, this.length);
-		let decoded: DynamicObject = {};
+		//let decoded: Record<
+		let decoded: Record<Key, Value> = {} as Record<Key, Value>;
 		
 		for (let i = 0; i < valueCount; i++) {
 			
@@ -708,7 +767,7 @@ class DictArg extends Arg {
 }
 
 
-class BranchArg extends Arg {
+class BranchArg<T> extends Arg<T> {
 	
 	private paths : Array<any>;
 	
@@ -755,12 +814,12 @@ class BranchArg extends Arg {
 	}
 	
 }
-class ConstArg extends Arg {
+class ConstArg<T> extends Arg<T> {
 	
-	private value: any;
+	private value: T;
 	private mandatory: boolean;
 	
-	constructor(value: any, mandatory = true) {
+	constructor(value: T, mandatory = true) {
 		
 		super(new ArgLength(0, 0));
 		
@@ -780,19 +839,19 @@ class ConstArg extends Arg {
 		
 	}
 	
-	public streamEncode(value: any, stream: ByteOStream): void {
+	public streamEncode(value: T | undefined, stream: ByteOStream): void {
 		
-		if (value == null) {
+		if (value === undefined) {
 			if (this.mandatory) {
 				console.error("Invalid value for mandatory constArg");
 			}
 		}
-		else if (value != this.value) {
-			console.error("Invalid value for ConstArg");
+		else if (value !== this.value) {
+			throw new Error("Invalid value for ConstArg.");
 		}
 		
 	}
-	public streamDecode(stream: ByteIStream): any {
+	public streamDecode(stream: ByteIStream): T {
 		return this.value;
 	}
 	
@@ -819,6 +878,8 @@ Arg.STR2 = new StrArg(ArgLength.VAR2);
 Arg.STR3 = new StrArg(ArgLength.VAR3);
 
 Arg.BOOL = Arg.choice<boolean>(false, true);
+
+Arg.NONE = Arg.const(undefined);
 
 
 /*let arg = {
@@ -927,3 +988,23 @@ console.log(encoded);
 console.log(Arg.decode(arg, encoded));*/
 
 //console.log(Arg.encodeInt(0));
+
+
+
+
+
+//type ArgTuple<T extends []> = [ArgLike<T[0]>];
+//type ArgTuple<T> = { [key in keyof T]: ArgLike<T[key]> }
+//type FlattenArg<T extends Arg<any>> = T extends Arg<infer ArgT> ? ArgT : never;
+//type FlattenArgMap<T extends ArgMap<any>> = T extends ArgMap<infer ArgT> ? ArgT : never;
+/*type FlattenArgLike<T extends ArgLike<T>> = (
+	T extends Arg<infer ArgT> ? ArgT :
+	(T extends ArgMap<infer ArgMapT> ? ArgMapT : undefined)
+);*/
+
+/*let a: ArgMap<{ name: string }> = { name: Arg.STR1 };
+let b: FlattenArgLike<ArgMap<{ name: string }>>;
+
+let c: ArgMap<[number, string]> = [Arg.INT1, Arg.STR2];
+let d: FlattenArgLike<typeof c>;*/
+

@@ -30,7 +30,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GameSocket = void 0;
 const two_way_map_1 = __importDefault(require("../Modules/Core/two_way_map"));
 const signaling_server_1 = __importStar(require("../Modules/Network/signaling_server"));
-const game_1 = __importStar(require("../MessageLists/game"));
+const game_signaling_1 = __importStar(require("../MessageLists/game_signaling"));
 /*export class Game { // We do not actually even need this wrapper, do we
     
     private mesh: Mesh<GameSocket>;
@@ -69,9 +69,9 @@ class GameServer extends signaling_server_1.default {
     //games = new TwoWayMap<String, Mesh<GameSocket>>();
     // Maybe could merge these or use a TwoWayMap
     games = new two_way_map_1.default();
-    constructor(wssArgs = signaling_server_1.default.WSS_ARGS) {
+    constructor(wssArgs = GameServer.WSS_ARGS) {
         super(GameSocket, wssArgs);
-        this.addMessages(game_1.default);
+        this.addMessages(game_signaling_1.default);
         this.meshCreated.connect((mesh) => {
             /*let creator: GameSocket | undefined = mesh.getPeer(0);
             
@@ -86,24 +86,23 @@ class GameServer extends signaling_server_1.default {
         this.meshDestroyed.connect((mesh) => {
             this.games.reverseDelete(mesh);
         });
-        this.onMessage(game_1.GAME_CREATE_REQUEST, (packet) => {
-            let mesh = this.createMesh(); //packet.peer);
+        this.onMessage(game_signaling_1.GAME_CREATE_REQUEST, packet => {
+            let mesh = this.createMesh(packet.peer);
             let code = this.generateGameCode();
             this.games.set(code, mesh);
-            this.send(packet.peer, game_1.GAME_CREATE_RESPONSE, code);
+            this.send(packet.peer, game_signaling_1.GAME_CREATE_RESPONSE, code);
         });
-        this.onMessage(game_1.GAME_JOIN_REQUEST, (packet) => {
+        this.onMessage(game_signaling_1.GAME_JOIN_REQUEST, packet => {
             if (this.getPeerMesh(packet.peer) !== undefined) { // Already has mesh
                 return;
             }
             //let code = packet.data.code;
-            let mesh = this.games.get(packet.data.code);
+            let mesh = this.games.get(packet.data);
             if (mesh === undefined) {
                 // Handle invalid join code somehow
                 //this.send(packet.peer, GAME_JOIN_FAILED);
             }
             else {
-                console.log("Game joined!");
                 mesh.add(packet.peer);
             }
             //this.send(packet.peer, GAME_JOIN_RESPONSE);
@@ -118,12 +117,6 @@ class GameServer extends signaling_server_1.default {
         if (this.games.has(code))
             return this.generateGameCode(length);
         return code;
-    }
-    meshFromCode(code) {
-        return this.games.get(code);
-    }
-    codeFromMesh(mesh) {
-        return this.games.reverseGet(mesh);
     }
 }
 exports.default = GameServer;

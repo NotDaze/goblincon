@@ -40,7 +40,7 @@ export default class Socket extends LocalMonoPeer {
 	}
 	
 	
-	send(message: Message, data?: any): void {
+	send<T>(message: Message<T>, data: T = undefined as T): void {
 		//this.ws.send(this.messageRoot.createRaw(message, data));
 		this.ws.send(this.createRaw(message, data));
 	}

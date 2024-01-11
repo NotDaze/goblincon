@@ -18,7 +18,7 @@ class Socket extends network_1.LocalMonoPeer {
         this.ws.onerror = (e) => { this.close(); };
         this.ws.onmessage = (e) => { this.handleRaw(undefined, new Uint8Array(e.data)); };
     }
-    send(message, data) {
+    send(message, data = undefined) {
         //this.ws.send(this.messageRoot.createRaw(message, data));
         this.ws.send(this.createRaw(message, data));
     }

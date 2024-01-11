@@ -11,7 +11,7 @@ import ByteIStream from "../Core/byteistream"
 import ByteOStream from "../Core/byteostream"
 
 
-import Arg from "./arg"
+import Arg, { ArgLike } from "./arg"
 
 export enum TransferMode {
 	RELIABLE,
@@ -29,16 +29,16 @@ export enum ConnectionState {
 	
 }
 
-export class Packet<PeerType extends RemotePeer | void> {
+export class Packet<PeerType extends RemotePeer | void, DataType> {
 	
-	public message: Message;
+	public message: Message<DataType>;
 	public peer: PeerType;
-	public data: any;
+	public data: DataType;
 	//public raw: Uint8Array;
 	//public branching = new Array<number>();
 	//public branching: Array<number>;
 	
-	constructor(message: Message, peer: PeerType, data?: any, raw = new Uint8Array()) {
+	constructor(message: Message<DataType>, peer: PeerType, data: DataType) {
 		
 		this.message = message;
 		this.peer = peer;
@@ -49,7 +49,7 @@ export class Packet<PeerType extends RemotePeer | void> {
 	
 }
 
-export class Message {
+export class Message<T> {
 	
 	//static META_TIMESTAMP = symbol("META_TIMESTAMP");
 	
@@ -58,11 +58,13 @@ export class Message {
 	}*/
 	//static RAW = Symbol("RAW"); // maybe
 	
-	private arg: any;
+	//type ArgT = T extends undefined ? undefined : ArgLike<T>;
+	
+	private arg: ArgLike<T>;
 	private transferMode: TransferMode; // Not sure this is actually necessary, but eh
 	//private conditions = new Array<(packet: Packet) => boolean>;
 	
-	constructor(arg?: any, transferMode = TransferMode.RELIABLE) {
+	constructor(arg: ArgLike<T>, transferMode = TransferMode.RELIABLE) {
 		
 		//super();
 		
@@ -71,24 +73,24 @@ export class Message {
 		
 	}
 	
-	public findMessage(stream: ByteIStream): Message | undefined {
+	/*public findMessage(stream: ByteIStream): Message | undefined {
 		return this;
-	}
+	}*/
 	
 	public getTransferMode(): TransferMode {
 		return this.transferMode;
 	}
 	
-	public encode(data: any): Uint8Array {
+	public encode(data: T): Uint8Array {
 		return Arg.encode(this.arg, data);
 	}
-	public streamEncode(data: any, stream: ByteOStream): void {
+	public streamEncode(data: T, stream: ByteOStream): void {
 		Arg.streamEncode(this.arg, data, stream);
 	}
-	public decode(raw: Uint8Array): any {
+	public decode(raw: Uint8Array): T {
 		return Arg.decode(this.arg, raw);
 	}
-	public streamDecode(stream: ByteIStream): any {
+	public streamDecode(stream: ByteIStream): T {
 		return Arg.streamDecode(this.arg, stream);
 	}
 	
@@ -118,8 +120,8 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 	
 	//private addresses = new Map<Message, Uint8Array>();
 	
-	private conditions = new Map<Message, Set<(packet: Packet<RemotePeerType>) => string | void>>();
-	private signals = new Map<Message, Signal<Packet<RemotePeerType>>>();
+	private conditions = new Map<Message<any>, Set<(packet: Packet<RemotePeerType, any>) => string | void>>();
+	private signals = new Map<Message<any>, Signal<Packet<RemotePeerType, any>>>();
 	
 	/*constructor(messageRoot: MessageDomain) {
 		
@@ -194,15 +196,15 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		return this.addresses.get(message);
 	}*/
 	
-	hasMessageSignal(message: Message): boolean {
+	hasMessageSignal(message: Message<any>): boolean {
 		return this.signals.has(message);
 	}
-	getMessageSignal(message: Message): Signal<Packet<RemotePeerType>> {
+	getMessageSignal<DataType>(message: Message<any>): Signal<Packet<RemotePeerType, DataType>> {
 		
 		let signal = this.signals.get(message);
 		
 		if (!signal) {
-			signal = new Signal<Packet<RemotePeerType>>();
+			signal = new Signal<Packet<RemotePeerType, DataType>>();
 			this.signals.set(message, signal);
 		}
 		
@@ -210,15 +212,15 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		
 	}
 	
-	addCallback(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	addCallback(message: Message<any>, callback: (packet: Packet<RemotePeerType, any>) => void): void {
 		this.getMessageSignal(message).connect(callback);
 	}
-	removeCallback(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	removeCallback(message: Message<any>, callback: (packet: Packet<RemotePeerType, any>) => void): void {
 		if (this.hasMessageSignal(message))
 			this.getMessageSignal(message).disconnect(callback);
 	}
 	
-	addCondition(messages: Message | Iterable<Message>, condition: (packet: Packet<RemotePeerType>) => string | void): void {
+	addCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
 		
 		for (const message of (messages instanceof Message ? [messages] : messages)) {
 			if (!this.conditions.has(message))
@@ -228,7 +230,7 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		}
 		
 	}
-	removeCondition(messages: Message | Iterable<Message>, condition: (packet: Packet<RemotePeerType>) => string | void): void {
+	removeCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
 		
 		for (const message of (messages instanceof Message ? [messages] : messages))
 			if (this.conditions.has(message))
@@ -236,11 +238,11 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		
 	}
 	
-	onMessage(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	onMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
 		this.addCallback(message, callback);
 	}
 	
-	handlePacket(packet: Packet<RemotePeerType>): void {
+	handlePacket(packet: Packet<RemotePeerType, any>): void {
 		
 		if (this.hasMessageSignal(packet.message)) {
 			
@@ -268,7 +270,7 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		}
 		
 	}
-	handlePackets(packets: Iterable<Packet<RemotePeerType>>): void {
+	handlePackets(packets: Iterable<Packet<RemotePeerType, any>>): void {
 		
 		for (const packet of packets)
 			this.handlePacket(packet);
@@ -277,7 +279,7 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 	
 }
 
-export type MultiPeerConnectionStatus<PeerType> = [ pending: Set<PeerType>, connected: Set<PeerType>, disconnected: Set<PeerType> ];
+export type MultiPeerConnectionStatus<PeerType> = [ pending: Array<PeerType>, connected: Array<PeerType>, disconnected: Array<PeerType> ];
 
 export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerType> {
 	
@@ -340,16 +342,16 @@ export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerTy
 	
 	getStatus(): MultiPeerConnectionStatus<PeerType> {
 		
-		let status: MultiPeerConnectionStatus<PeerType> = [ new Set(), new Set(), new Set() ];
+		let status: MultiPeerConnectionStatus<PeerType> = [ new Array(), new Array(), new Array() ];
 		
 		for (const peer of this.peers) {
 			
 			if (peer.state.value === ConnectionState.CONNECTED)
-				status[1].add(peer);
+				status[1].push(peer);
 			else if (peer.state.value === ConnectionState.DISCONNECTED)
-				status[2].add(peer);
+				status[2].push(peer);
 			else
-				status[0].add(peer);
+				status[0].push(peer);
 			
 		}
 		
@@ -359,10 +361,10 @@ export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerTy
 	getIDStatus(): MultiPeerConnectionStatus<number> {
 		
 		let status = this.getStatus();
-		let idStatus: MultiPeerConnectionStatus<number> = [ new Set(), new Set(), new Set() ];
+		let idStatus: MultiPeerConnectionStatus<number> = [ [], [], [] ];
 		
 		for (let i = 0; i < 3; i++)
-			idStatus[i] = this.getPeerIDs(status[i])
+			idStatus[i] = Array.from(this.getPeerIDs(status[i]))
 		
 		return idStatus;
 		
@@ -457,7 +459,7 @@ class Peer {
 
 class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 	
-	protected messages = new Array<Message>();
+	protected messages = new Array<Message<any>>();
 	protected messageHandler: MessageHandler<RemotePeerType>;
 	
 	constructor() {
@@ -500,25 +502,25 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		return Arg.calculateByteCount(this.messages.length);
 	}
 	
-	hasMessage(message: Message): boolean {
+	hasMessage(message: Message<any>): boolean {
 		return this.messages.includes(message);
 	}
-	getMessageID(message: Message): number {
+	getMessageID(message: Message<any>): number {
 		return this.messages.indexOf(message);
 	}
-	addMessage(message: Message): void {
+	addMessage(message: Message<any>): void {
 		this.messages.push(message);
 	}
-	addMessages(messages: Iterable<Message>): void {
+	addMessages(messages: Iterable<Message<any>>): void {
 		for (const message of messages)
 			this.addMessage(message);
 	}
 	
-	protected createPackets(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType>> {
+	protected createPackets(peer: RemotePeerType, raw: Uint8Array): Array<Packet<RemotePeerType, any>> {
 		
 		//console.log(raw);
 		let stream = new ByteIStream(raw);
-		let packets = new Array<Packet<RemotePeerType>>();
+		let packets = new Array<Packet<RemotePeerType, any>>();
 		
 		while (!stream.complete) {
 			
@@ -536,7 +538,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 			//packets.push(message.createPacket(stream));
 			
 			packets.push(
-				new Packet<RemotePeerType>(message, peer, message.streamDecode(stream))
+				new Packet<RemotePeerType, any>(message, peer, message.streamDecode(stream))
 			);
 			
 		}
@@ -545,7 +547,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		return packets;
 		
 	}
-	protected streamCreateRaw(message: Message, data: any, stream: ByteOStream): void {
+	protected streamCreateRaw(message: Message<any>, data: any, stream: ByteOStream): void {
 		
 		//let address = this.getMessageAddress(message);
 		
@@ -558,7 +560,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		message.streamEncode(data, stream);
 		
 	}
-	protected createRaw(message: Message, data: any): Uint8Array {
+	protected createRaw(message: Message<any>, data: any): Uint8Array {
 		
 		let stream = new ByteOStream();
 		this.streamCreateRaw(message, data, stream);
@@ -570,11 +572,11 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 	//private handleRaw(peer: RemotePeer, raw: Uint8Array): void {
 	//	this.handlePackets(this.messageIndex.createPackets(peer, raw));
 	//}
-	protected handlePackets(packets: Iterable<Packet<RemotePeerType>>): void {
+	protected handlePackets(packets: Iterable<Packet<RemotePeerType, any>>): void {
 		for (const packet of packets)
 			this.handlePacket(packet);
 	}
-	protected handlePacket(packet: Packet<RemotePeerType>): void {
+	protected handlePacket(packet: Packet<RemotePeerType, any>): void {
 		this.messageHandler.handlePacket(packet);
 	}
 	protected handleRaw(peer: RemotePeerType, raw: Uint8Array): void {
@@ -588,7 +590,7 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		return this.messageDomain.newMessage(arg, transferMode);
 	}*/
 	
-	private verifyHasMessages(messages: Message | Iterable<Message>): void {
+	private verifyHasMessages(messages: Message<any> | Iterable<Message<any>>): void {
 		
 		if (messages instanceof Message) {
 			if (!this.hasMessage(messages))
@@ -601,23 +603,23 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		}
 		
 	}
-	public addCondition(messages: Message | Iterable<Message>, condition: (packet: Packet<RemotePeerType>) => string | void): void {
+	public addCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
 		this.verifyHasMessages(messages);
 		this.messageHandler.addCondition(messages, condition);
 	}
-	public removeCondition(messages: Message | Iterable<Message>, condition: (packet: Packet<RemotePeerType>) => string | void): void {
+	public removeCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
 		this.verifyHasMessages(messages);
 		this.messageHandler.removeCondition(messages, condition);
 	}
-	public addCallback(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	public addCallback<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, any>) => void): void {
 		this.verifyHasMessages(message);
 		this.messageHandler.addCallback(message, callback);
 	}
-	public removeCallback(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	public removeCallback<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
 		this.verifyHasMessages(message);
 		this.messageHandler.removeCallback(message, callback);
 	}
-	public onMessage(message: Message, callback: (packet: Packet<RemotePeerType>) => void): void {
+	public onMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
 		this.addCallback(message, callback);
 	}
 	// Maybe verify that the 
@@ -632,7 +634,7 @@ export class LocalMonoPeer extends LocalPeer<void> {
 		
 	}
 	
-	public send(message: Message, data?: any): void { // virtual
+	public send<T>(message: Message<T>, data: T): void { // virtual
 		
 	}
 	
@@ -779,15 +781,15 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		
 	}
 	
-	public send(target: RemotePeerType | Iterable<RemotePeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public send<T>(target: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
 		//this.sendRaw(target, this.messageIndex.createRaw(message, data), transferMode);
 		this.sendRaw(target, this.createRaw(message, data), transferMode);
 	}
-	public sendAll(message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public sendAll<T>(message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
 		//this.sendRawAll(this.messageDomain.createRaw(message, data), transferMode);
 		this.sendRawAll(this.createRaw(message, data), transferMode);
 	}
-	public sendAllExcept(exclusions: RemotePeerType | Iterable<RemotePeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public sendAllExcept<T>(exclusions: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
 		//this.sendRawAllExcept(exclusions, this.messageIndex.createRaw(message, data), transferMode);
 		this.sendRawAllExcept(exclusions, this.createRaw(message, data), transferMode);
 	}
@@ -1005,13 +1007,13 @@ export class Group<PeerType extends RemotePeer> {
 		
 	};
 	
-	public send(peers: PeerType | Iterable<PeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public send<T>(peers: PeerType | Iterable<PeerType>, message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
 		this.localPeer.send(peers, message, data, transferMode);
 	}
-	public sendAll(message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public sendAll<T>(message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
 		this.localPeer.send(this.peers, message, data, transferMode);
 	}
-	public sendAllExcept(exclusions: PeerType | Iterable<PeerType>, message: Message, data?: any, transferMode = message.getTransferMode()): void {
+	public sendAllExcept<T>(exclusions: PeerType | Iterable<PeerType>, message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
 		
 		let peers = new Set(this.peers);
 		

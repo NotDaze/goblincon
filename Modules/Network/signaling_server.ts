@@ -211,7 +211,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		
 		this.stabilized.connect((): void => {
 			
-			this.sendAll(MESH_STABILIZED);
+			this.sendAll(MESH_STABILIZED, undefined);
 			console.log("Stabilized!");
 			
 		});
@@ -279,7 +279,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		
 		this.send(newSocket, MESH_INITIALIZE, {
 			localID: newSocket.getMeshID(),
-			peerIDs: this.ids
+			peerIDs: Array.from(this.ids)
 		});
 		
 		this.sendAllExcept(newSocket, MESH_CONNECT_PEERS, {
@@ -326,7 +326,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 			
 			this.send(socket, MESH_INITIALIZE, {
 				localID: socket.getMeshID(),
-				peerIDs: this.ids
+				peerIDs: Array.from(this.ids)
 			});
 			
 		}
@@ -542,7 +542,7 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED
 			],
-			(packet: Packet<SocketType>) => {
+			(packet: Packet<SocketType, any>) => {
 				
 				let mesh = this.getPeerMesh(packet.peer);
 				
@@ -556,7 +556,7 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED
 			],
-			(packet: Packet<SocketType>) => {
+			(packet: Packet<SocketType, { peerID: number }>) => {
 				
 				let mesh = this.getPeerMesh(packet.peer);
 				
@@ -574,12 +574,14 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 		
 		
 		
-		this.onMessage(MESH_CLIENT_STATUS_UPDATE, (packet: Packet<SocketType>) => {
+		this.onMessage(MESH_CLIENT_STATUS_UPDATE, packet => {
+			
+			//packet.data
 			
 			let mesh = this.getPeerMesh(packet.peer);
 			mesh?.handleConnectionStatusUpdate(
 				packet.peer,
-				packet.data
+				packet.data as MultiPeerConnectionStatus<number>
 				/*[
 					packet.data.pendingIDs,
 					packet.data.connectedIDs,
@@ -590,7 +592,7 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 		});
 		
 		
-		this.onMessage(MESH_SESSION_DESCRIPTION_CREATED, (packet: Packet<SocketType>) => {
+		this.onMessage(MESH_SESSION_DESCRIPTION_CREATED, packet => {
 			// peerID, type, sdp
 			
 			/*let mesh = this.getPeerMesh(packet.peer);
@@ -615,7 +617,7 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 			});
 			
 		});
-		this.onMessage(MESH_ICE_CANDIDATE_CREATED, (packet: Packet<SocketType>) => {
+		this.onMessage(MESH_ICE_CANDIDATE_CREATED, packet => {
 			// peerID, media, index, name
 			
 			/*let mesh = this.getPeerMesh(packet.peer);

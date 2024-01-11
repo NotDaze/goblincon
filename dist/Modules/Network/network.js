@@ -54,7 +54,7 @@ class Packet {
     //public raw: Uint8Array;
     //public branching = new Array<number>();
     //public branching: Array<number>;
-    constructor(message, peer, data, raw = new Uint8Array()) {
+    constructor(message, peer, data) {
         this.message = message;
         this.peer = peer;
         this.data = data;
@@ -68,6 +68,7 @@ class Message {
         
     }*/
     //static RAW = Symbol("RAW"); // maybe
+    //type ArgT = T extends undefined ? undefined : ArgLike<T>;
     arg;
     transferMode; // Not sure this is actually necessary, but eh
     //private conditions = new Array<(packet: Packet) => boolean>;
@@ -76,9 +77,9 @@ class Message {
         this.arg = arg;
         this.transferMode = transferMode;
     }
-    findMessage(stream) {
+    /*public findMessage(stream: ByteIStream): Message | undefined {
         return this;
-    }
+    }*/
     getTransferMode() {
         return this.transferMode;
     }
@@ -271,22 +272,22 @@ class RemotePeerIndex extends id_index_1.default {
         return out;
     }
     getStatus() {
-        let status = [new Set(), new Set(), new Set()];
+        let status = [new Array(), new Array(), new Array()];
         for (const peer of this.peers) {
             if (peer.state.value === ConnectionState.CONNECTED)
-                status[1].add(peer);
+                status[1].push(peer);
             else if (peer.state.value === ConnectionState.DISCONNECTED)
-                status[2].add(peer);
+                status[2].push(peer);
             else
-                status[0].add(peer);
+                status[0].push(peer);
         }
         return status;
     }
     getIDStatus() {
         let status = this.getStatus();
-        let idStatus = [new Set(), new Set(), new Set()];
+        let idStatus = [[], [], []];
         for (let i = 0; i < 3; i++)
-            idStatus[i] = this.getPeerIDs(status[i]);
+            idStatus[i] = Array.from(this.getPeerIDs(status[i]));
         return idStatus;
     }
 }
@@ -735,13 +736,13 @@ class Group {
         return removed;
     }
     ;
-    send(peers, message, data, transferMode = message.getTransferMode()) {
+    send(peers, message, data = undefined, transferMode = message.getTransferMode()) {
         this.localPeer.send(peers, message, data, transferMode);
     }
-    sendAll(message, data, transferMode = message.getTransferMode()) {
+    sendAll(message, data = undefined, transferMode = message.getTransferMode()) {
         this.localPeer.send(this.peers, message, data, transferMode);
     }
-    sendAllExcept(exclusions, message, data, transferMode = message.getTransferMode()) {
+    sendAllExcept(exclusions, message, data = undefined, transferMode = message.getTransferMode()) {
         let peers = new Set(this.peers);
         for (const peer of (exclusions instanceof RemotePeer ? [exclusions] : exclusions))
             peers.delete(peer);

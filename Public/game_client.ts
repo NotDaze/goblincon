@@ -1,6 +1,6 @@
 
 
-import Signal from "./Core/signal"
+import Signal from "../Modules/Core/signal"
 import {
 	
 	TransferMode,
@@ -14,15 +14,15 @@ import {
 	//LocalMultiPeer,
 	//RemotePeer,
 	
-} from "./Network/network"
-import LocalMeshClient, { RemoteMeshClient } from "./Network/mesh_client"
-import Arg from "./Network/arg"
+} from "../Modules/Network/network"
+import LocalMeshClient, { RemoteMeshClient } from "../Modules/Network/mesh_client"
+import Arg from "../Modules/Network/arg"
 
-import GameMessages, {
+import GameSignalingMessages, {
 	GAME_CREATE_REQUEST,
 	GAME_CREATE_RESPONSE,
 	GAME_JOIN_REQUEST
-} from "../MessageLists/game"
+} from "../MessageLists/game_signaling"
 
 
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
@@ -48,21 +48,17 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	constructor(serverUrl: string, protocols: Array<string> = []) {
 		
 		super(RemoteGameClient, serverUrl, protocols);
-		this.addServerMessages(GameMessages);
+		this.addServerMessages(GameSignalingMessages);
 		
-		console.log(this.getMessageID(GAME_CREATE_REQUEST));
-		
-		this.onServerMessage(GAME_CREATE_RESPONSE, (packet: Packet<void>) => {
+		this.onServerMessage(GAME_CREATE_RESPONSE, packet => {
 			
 			console.log(`Game created: ${packet.data}`);
 			
-			this.joinGame(packet.data);
+			//this.joinGame(packet.data);
 			
 		});
 		
-		this.socket.connected.connect(() => {
-			this.createGame();
-		});
+		
 		
 	}
 	

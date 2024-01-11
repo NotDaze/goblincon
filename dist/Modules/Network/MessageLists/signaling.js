@@ -17,7 +17,7 @@ exports.MESH_INITIALIZE = new network_1.Message({
     localID: arg_1.default.UINT2,
     peerIDs: arg_1.default.array(arg_1.default.UINT2)
 });
-exports.MESH_TERMINATE = new network_1.Message();
+exports.MESH_TERMINATE = new network_1.Message(arg_1.default.NONE);
 exports.MESH_CONNECT_PEERS = new network_1.Message({
     peerIDs: arg_1.default.array(arg_1.default.UINT2)
 });
@@ -25,7 +25,7 @@ exports.MESH_DISCONNECT_PEERS = new network_1.Message({
     peerIDs: arg_1.default.array(arg_1.default.UINT2)
 });
 //const MESH_CREATION_COMPLETED = new Message();
-exports.MESH_STABILIZED = new network_1.Message();
+exports.MESH_STABILIZED = new network_1.Message(arg_1.default.NONE);
 //const MESH_DESTABILIZED = new Message();
 exports.MESH_SESSION_DESCRIPTION_CREATED = new network_1.Message({
     peerID: arg_1.default.UINT2,
@@ -42,7 +42,7 @@ exports.MESH_ICE_CANDIDATE_CREATED = new network_1.Message({
     sdpMLineIndex: arg_1.default.UINT2,
     usernameFragment: arg_1.default.STR2
 });
-exports.MESH_STATUS_UPDATE = new network_1.Message();
+exports.MESH_STATUS_UPDATE = new network_1.Message(arg_1.default.NONE);
 /*export const MESH_CLIENT_STATUS_UPDATE = new Message([{
     pendingIDs: Arg.array(Arg.UINT2),
     connectedIDs: Arg.array(Arg.UINT2),

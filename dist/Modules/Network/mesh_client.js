@@ -259,18 +259,25 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     //statusUpdate = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
     //stabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>]>();
     //destabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
+    serverConnected;
+    serverDisconnected;
+    serverConnectionFailed;
+    //serverConnecting: Signal<void>;
     socket;
     clientClass;
     stable = false;
     fullyConnected = false;
     constructor(remoteClientClass, serverUrl, protocols = []) {
         super();
-        this.socket = new websocket_client_1.default(serverUrl, protocols);
-        this.addServerMessages(signaling_1.default);
         this.clientClass = remoteClientClass;
+        this.socket = new websocket_client_1.default(serverUrl, protocols);
+        this.serverConnected = this.socket.connected;
+        this.serverDisconnected = this.socket.disconnected;
+        this.serverConnectionFailed = this.socket.connectionFailed;
+        this.addServerMessages(signaling_1.default);
         //console.log(this.socket.messageRoot);
         //console.log(this.socket.messageRoot.findMessage(new ByteIStream(new Uint8Array([8, 0]))))
-        this.socket.connected.connect(() => {
+        this.serverConnected.connect(() => {
             console.log("Connected to server");
         });
         this.connected.connect(() => {
@@ -314,7 +321,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
             if (this.state.is(network_1.ConnectionState.CONNECTING)) {
                 let status, [pending, connected, disconnected] = this.getIDStatus();
                 //let [pending, connected, disconnected] = status;
-                if (pending.size === 0) { // Everyone is done connecting
+                if (pending.length === 0) { // Everyone is done connecting
                     //this.checkStatus(status);
                     this.sendStatus(status);
                     this.state.set(network_1.ConnectionState.CONNECTED);
@@ -338,7 +345,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         this.initMessageHandling();
     }
     initMessageHandling() {
-        this.socket.addCondition(// Mesh is connecting or connected
+        this.addServerCondition(// Mesh is connecting or connected
         [
             signaling_1.MESH_TERMINATE,
             signaling_1.MESH_CONNECT_PEERS,
@@ -349,7 +356,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
             if (!this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
                 return "Message received for mesh that is not initialized.";
         });
-        this.socket.addCondition([
+        this.addServerCondition([
             signaling_1.MESH_SESSION_DESCRIPTION_CREATED,
             signaling_1.MESH_ICE_CANDIDATE_CREATED
         ], (packet) => {
@@ -357,33 +364,34 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
             if (peer == undefined || !peer.state.is(network_1.ConnectionState.CONNECTING))
                 return "Invalid SDP/ICE transport.";
         });
-        this.socket.onMessage(signaling_1.MESH_INITIALIZE, (packet) => {
+        this.onServerMessage(signaling_1.MESH_INITIALIZE, packet => {
             if (this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED)) {
                 console.error("Attempted to initialize mesh that is already initialized.");
                 return;
             }
+            packet.data;
             //console.log(packet.data.localID, packet.data.peerIDs);
             this.state.set(network_1.ConnectionState.CONNECTING);
             this.setID(packet.data.localID);
             this.createPeers(packet.data.peerIDs);
         });
-        this.socket.onMessage(signaling_1.MESH_TERMINATE, (packet) => {
+        this.onServerMessage(signaling_1.MESH_TERMINATE, packet => {
             this.close();
         });
-        this.socket.onMessage(signaling_1.MESH_CONNECT_PEERS, (packet) => {
+        this.onServerMessage(signaling_1.MESH_CONNECT_PEERS, packet => {
             this.createPeers(packet.data.peerIDs);
         });
-        this.socket.onMessage(signaling_1.MESH_DISCONNECT_PEERS, (packet) => {
+        this.onServerMessage(signaling_1.MESH_DISCONNECT_PEERS, packet => {
             this.dropPeers(packet.data.peerIDs);
         });
-        this.socket.onMessage(signaling_1.MESH_SESSION_DESCRIPTION_CREATED, (packet) => {
+        this.onServerMessage(signaling_1.MESH_SESSION_DESCRIPTION_CREATED, packet => {
             //console.log(packet.data);
             this.getPeer(packet.data.peerID)?.setRemoteDescription({
                 type: packet.data.type,
                 sdp: packet.data.sdp
             });
         });
-        this.socket.onMessage(signaling_1.MESH_ICE_CANDIDATE_CREATED, (packet) => {
+        this.onServerMessage(signaling_1.MESH_ICE_CANDIDATE_CREATED, packet => {
             //console.log(packet.data);
             this.getPeer(packet.data.peerID)?.addRemoteIceCandidate({
                 candidate: packet.data.candidate,
@@ -429,17 +437,20 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     isStable() {
         return this.stable;
     }
-    sendServer(message, data) {
-        this.socket.send(message, data);
-    }
-    onServerMessage(message, callback) {
-        this.socket.onMessage(message, callback);
-    }
     addServerMessage(message) {
         this.socket.addMessage(message);
     }
     addServerMessages(messages) {
         this.socket.addMessages(messages);
+    }
+    onServerMessage(message, callback) {
+        this.socket.onMessage(message, callback);
+    }
+    addServerCondition(messages, condition) {
+        this.socket.addCondition(messages, condition);
+    }
+    sendServer(message, data = undefined) {
+        this.socket.send(message, data);
     }
 }
 exports.default = LocalMeshClient;

@@ -355,6 +355,13 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	//stabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>]>();
 	//destabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
 	
+	serverConnected: Signal<void>;
+	serverDisconnected: Signal<void>;
+	
+	serverConnectionFailed: Signal<void>;
+	
+	//serverConnecting: Signal<void>;
+	
 	protected socket: SocketClient;
 	private clientClass: { new(): RemoteClientType };
 	
@@ -368,16 +375,22 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 		super();
 		
+		this.clientClass = remoteClientClass;
+		
 		this.socket = new SocketClient(serverUrl, protocols);
+		this.serverConnected = this.socket.connected;
+		this.serverDisconnected = this.socket.disconnected;
+		this.serverConnectionFailed = this.socket.connectionFailed;
+		
 		this.addServerMessages(SignalingMessages);
 		
-		this.clientClass = remoteClientClass;
+		
 		
 		
 		//console.log(this.socket.messageRoot);
 		//console.log(this.socket.messageRoot.findMessage(new ByteIStream(new Uint8Array([8, 0]))))
 		
-		this.socket.connected.connect(() => {
+		this.serverConnected.connect(() => {
 			console.log("Connected to server");
 		});
 		
@@ -441,7 +454,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				let status, [pending, connected, disconnected] = this.getIDStatus();
 				//let [pending, connected, disconnected] = status;
 				
-				if (pending.size === 0) { // Everyone is done connecting
+				if (pending.length === 0) { // Everyone is done connecting
 					
 					//this.checkStatus(status);
 					this.sendStatus(status);
@@ -490,7 +503,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 		
 		
-		this.socket.addCondition( // Mesh is connecting or connected
+		this.addServerCondition( // Mesh is connecting or connected
 			[
 				MESH_TERMINATE,
 				MESH_CONNECT_PEERS,
@@ -498,7 +511,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED,
 			],
-			(packet: Packet<void>) => {
+			(packet: Packet<void, any>) => {
 				
 				if (!this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
 					return "Message received for mesh that is not initialized.";
@@ -506,12 +519,12 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			}
 		);
 		
-		this.socket.addCondition(
+		this.addServerCondition(
 			[
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED
 			],
-			(packet: Packet<void>) => {
+			(packet: Packet<void, { peerID: number }>) => {
 				
 				let peer = this.getPeer(packet.data.peerID);
 				
@@ -523,12 +536,14 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 		
 		
-		this.socket.onMessage(MESH_INITIALIZE, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_INITIALIZE, packet => {
 			
 			if (this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED)) {
 				console.error("Attempted to initialize mesh that is already initialized.");
 				return;
 			}
+			
+			packet.data
 			
 			//console.log(packet.data.localID, packet.data.peerIDs);
 			
@@ -540,23 +555,23 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		});
 		
 		
-		this.socket.onMessage(MESH_TERMINATE, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_TERMINATE, packet => {
 			
 			this.close();
 			
 		});
 		
-		this.socket.onMessage(MESH_CONNECT_PEERS, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_CONNECT_PEERS, packet => {
 			
 			this.createPeers(packet.data.peerIDs);
 			
 		});
-		this.socket.onMessage(MESH_DISCONNECT_PEERS, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_DISCONNECT_PEERS, packet => {
 			
 			this.dropPeers(packet.data.peerIDs);
 			
 		});
-		this.socket.onMessage(MESH_SESSION_DESCRIPTION_CREATED, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_SESSION_DESCRIPTION_CREATED, packet => {
 			
 			//console.log(packet.data);
 			
@@ -566,7 +581,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			});
 			
 		});
-		this.socket.onMessage(MESH_ICE_CANDIDATE_CREATED, (packet: Packet<void>) => {
+		this.onServerMessage(MESH_ICE_CANDIDATE_CREATED, packet => {
 			
 			//console.log(packet.data);
 			
@@ -640,18 +655,25 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		return this.stable;
 	}
 	
-	public sendServer(message: Message, data?: any): void {
-		this.socket.send(message, data);
-	}
-	public onServerMessage(message: Message, callback: (packet: Packet<void>) => void): void {
-		this.socket.onMessage(message, callback);
-	}
-	public addServerMessage(message: Message): void {
+	
+	public addServerMessage(message: Message<any>): void {
 		this.socket.addMessage(message);
 	}
-	public addServerMessages(messages: Iterable<Message>): void {
+	public addServerMessages(messages: Iterable<Message<any>>): void {
 		this.socket.addMessages(messages);
 	}
+	public onServerMessage<T>(message: Message<T>, callback: (packet: Packet<void, T>) => void): void {
+		this.socket.onMessage(message, callback);
+	}
+	public addServerCondition<T>(messages: Iterable<Message<T>>, condition: (packet: Packet<void, T>) => string | void): void {
+		this.socket.addCondition(messages, condition);
+	}
+	
+	public sendServer<T>(message: Message<T>, data: T = undefined as T): void {
+		this.socket.send(message, data);
+	}
+	
+	
 	
 	
 }

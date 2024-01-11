@@ -23,11 +23,11 @@ import {
 
 import TwoWayMap from '../Modules/Core/two_way_map';
 import SignalingServer, { SignalingSocket, Mesh } from "../Modules/Network/signaling_server";
-import GameMessages, {
+import GameSignalingMessages, {
 	GAME_CREATE_REQUEST,
 	GAME_CREATE_RESPONSE,
 	GAME_JOIN_REQUEST
-} from "../MessageLists/game";
+} from "../MessageLists/game_signaling";
 
 
 /*export class Game { // We do not actually even need this wrapper, do we
@@ -76,10 +76,10 @@ export default class GameServer extends SignalingServer<GameSocket> {
 	private games = new TwoWayMap<string, Mesh<GameSocket>>();
 	
 	
-	constructor(wssArgs = SignalingServer.WSS_ARGS) {
+	constructor(wssArgs = GameServer.WSS_ARGS) {
 		
 		super(GameSocket, wssArgs);
-		this.addMessages(GameMessages);
+		this.addMessages(GameSignalingMessages);
 		
 		this.meshCreated.connect((mesh: Mesh<GameSocket>) => {
 			
@@ -100,9 +100,9 @@ export default class GameServer extends SignalingServer<GameSocket> {
 		});
 		
 		
-		this.onMessage(GAME_CREATE_REQUEST, (packet: Packet<GameSocket>) => {
+		this.onMessage(GAME_CREATE_REQUEST, packet => {
 			
-			let mesh = this.createMesh() //packet.peer);
+			let mesh = this.createMesh(packet.peer);
 			let code = this.generateGameCode();
 			
 			this.games.set(code, mesh);
@@ -111,14 +111,14 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			
 		});
 		
-		this.onMessage(GAME_JOIN_REQUEST, (packet: Packet<GameSocket>) => {
+		this.onMessage(GAME_JOIN_REQUEST, packet => {
 			
 			if (this.getPeerMesh(packet.peer) !== undefined) { // Already has mesh
 				return;
 			}
 			
 			//let code = packet.data.code;
-			let mesh = this.games.get(packet.data.code);
+			let mesh = this.games.get(packet.data);
 			
 			
 			
@@ -127,7 +127,6 @@ export default class GameServer extends SignalingServer<GameSocket> {
 				//this.send(packet.peer, GAME_JOIN_FAILED);
 			}
 			else {
-				console.log("Game joined!");
 				mesh.add(packet.peer);
 			}
 			
@@ -154,12 +153,12 @@ export default class GameServer extends SignalingServer<GameSocket> {
 		return code;
 		
 	}
-	meshFromCode(code: string): Mesh<GameSocket> | undefined {
+	/*meshFromCode(code: string): Mesh<GameSocket> | undefined {
 		return this.games.get(code);
 	}
 	codeFromMesh(mesh: Mesh<GameSocket>): string | undefined {
 		return this.games.reverseGet(mesh);
-	}
+	}*/
 	
 	
 	

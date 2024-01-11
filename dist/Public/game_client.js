@@ -24,8 +24,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RemoteGameClient = void 0;
-const mesh_client_1 = __importStar(require("./Network/mesh_client"));
-const game_1 = __importStar(require("../MessageLists/game"));
+const mesh_client_1 = __importStar(require("../Modules/Network/mesh_client"));
+const game_signaling_1 = __importStar(require("../MessageLists/game_signaling"));
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
 // Host creates game (via server)
 // Server generates a room ID thing
@@ -41,18 +41,17 @@ exports.RemoteGameClient = RemoteGameClient;
 class LocalGameClient extends mesh_client_1.default {
     constructor(serverUrl, protocols = []) {
         super(RemoteGameClient, serverUrl, protocols);
-        this.addServerMessages(game_1.default);
-        console.log(this.getMessageID(game_1.GAME_CREATE_REQUEST));
-        this.onServerMessage(game_1.GAME_CREATE_RESPONSE, (packet) => {
+        this.addServerMessages(game_signaling_1.default);
+        this.onServerMessage(game_signaling_1.GAME_CREATE_RESPONSE, packet => {
             console.log(`Game created: ${packet.data}`);
             //this.joinGame(packet.data);
         });
     }
     createGame() {
-        this.sendServer(game_1.GAME_CREATE_REQUEST);
+        this.sendServer(game_signaling_1.GAME_CREATE_REQUEST);
     }
     joinGame(code) {
-        this.sendServer(game_1.GAME_JOIN_REQUEST, code);
+        this.sendServer(game_signaling_1.GAME_JOIN_REQUEST, code);
     }
 }
 exports.default = LocalGameClient;
