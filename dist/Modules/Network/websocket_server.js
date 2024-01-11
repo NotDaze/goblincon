@@ -157,8 +157,8 @@ class SocketServer extends network_1.LocalMultiPeer {
     wss;
     //private buffer = new ByteOStream();
     //protected socketCreation = new Signal<WebSocket>();
-    constructor(messageRoot, socketClass, wssArgs = SocketServer.WSS_ARGS) {
-        super(messageRoot);
+    constructor(socketClass, wssArgs = SocketServer.WSS_ARGS) {
+        super();
         //this.messageIndex = messageIndex;
         this.wss = new ws_1.WebSocketServer(wssArgs);
         this.connected.bindEvent(this.wss, "listening");

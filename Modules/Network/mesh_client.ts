@@ -10,7 +10,6 @@ import {
 	
 	Packet,
 	Message,
-	MessageDomain,
 	MessageHandler,
 	
 	//LocalMonoPeer,
@@ -35,7 +34,7 @@ import SignalingMessages, {
 	MESH_STATUS_UPDATE,
 	MESH_CLIENT_STATUS_UPDATE,
 	
-} from "./MessageIndices/signaling"
+} from "./MessageLists/signaling"
 
 
 /*export enum MeshStatus {
@@ -356,7 +355,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	//stabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>]>();
 	//destabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
 	
-	private socket: SocketClient;
+	protected socket: SocketClient;
 	private clientClass: { new(): RemoteClientType };
 	
 	
@@ -365,12 +364,15 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	
 	private fullyConnected = false;
 	
-	constructor(messageRoot: MessageDomain, remoteClientClass: { new(): RemoteClientType }, serverUrl: string, protocols: Array<string> = [], messageHandler = new MessageHandler<RemoteClientType>()) {
+	constructor(remoteClientClass: { new(): RemoteClientType }, serverUrl: string, protocols: Array<string> = []) {
 		
-		super(messageRoot, messageHandler);
+		super();
 		
-		this.socket = new SocketClient(SignalingMessages, serverUrl, protocols);
+		this.socket = new SocketClient(serverUrl, protocols);
+		this.addServerMessages(SignalingMessages);
+		
 		this.clientClass = remoteClientClass;
+		
 		
 		//console.log(this.socket.messageRoot);
 		//console.log(this.socket.messageRoot.findMessage(new ByteIStream(new Uint8Array([8, 0]))))
@@ -488,7 +490,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 		
 		
-		this.addCondition( // Mesh is connecting or connected
+		this.socket.addCondition( // Mesh is connecting or connected
 			[
 				MESH_TERMINATE,
 				MESH_CONNECT_PEERS,
@@ -496,7 +498,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED,
 			],
-			(packet: Packet<RemoteMeshClient>) => {
+			(packet: Packet<void>) => {
 				
 				if (!this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
 					return "Message received for mesh that is not initialized.";
@@ -504,12 +506,12 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			}
 		);
 		
-		this.addCondition(
+		this.socket.addCondition(
 			[
 				MESH_SESSION_DESCRIPTION_CREATED,
 				MESH_ICE_CANDIDATE_CREATED
 			],
-			(packet: Packet<RemoteMeshClient>) => {
+			(packet: Packet<void>) => {
 				
 				let peer = this.getPeer(packet.data.peerID);
 				
@@ -640,6 +642,15 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	
 	public sendServer(message: Message, data?: any): void {
 		this.socket.send(message, data);
+	}
+	public onServerMessage(message: Message, callback: (packet: Packet<void>) => void): void {
+		this.socket.onMessage(message, callback);
+	}
+	public addServerMessage(message: Message): void {
+		this.socket.addMessage(message);
+	}
+	public addServerMessages(messages: Iterable<Message>): void {
+		this.socket.addMessages(messages);
 	}
 	
 	

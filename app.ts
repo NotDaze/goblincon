@@ -14,9 +14,12 @@ import {
 
 
 //import { SignalingSocket } from "./Modules/Network/ss"
-import SignalingServer, { SignalingSocket } from "./Modules/Network/signaling_server"
+//import SignalingServer, { SignalingSocket } from "./Modules/Network/signaling_server"
+
+import path from "path"
 import express from "express"
 //import http from "http"
+import GameServer, { GameSocket } from "./Private/game_server";
 
 
 const PORT: Number = 5050;
@@ -26,20 +29,20 @@ const app: express.Application = express();
 const httpServer = app.listen(PORT, () => {
 	console.log(`Listening on port ${PORT}`);
 });
-const signalingServer = new SignalingServer({ server: httpServer, clientTracking: false }, SignalingSocket);
+const gameServer = new GameServer({ server: httpServer, clientTracking: false });
 
 
 app.get("/", (req: express.Request, res: express.Response) => {
-	app.use(express.static(__dirname + "/Client"));
-	res.sendFile(__dirname + "/Client/index.html");
+	app.use(express.static(path.join(__dirname, "/Public")));
+	res.sendFile(__dirname + "/Public/index.html");
 });
 
 
 
-signalingServer.connected.connect(() => {
+gameServer.connected.connect(() => {
 	console.log("Signaling!");
 });
-signalingServer.peerConnected.connect((peer: SignalingSocket) => {
+gameServer.peerConnected.connect((peer: GameSocket) => {
 	//console.log("Client connected!");
 });
 /*server.socketConnected.connect((socket: Socket) => {

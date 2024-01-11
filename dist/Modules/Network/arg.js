@@ -11,9 +11,15 @@ const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
 ;
 //import { joinByteArrays, ByteOStream, ByteIStream } from "../Core/byteistream"
-class HeaderFootprint {
+class ArgLength {
     iterations;
     bytes;
+    static VAR1 = new ArgLength(1, 1);
+    static VAR2 = new ArgLength(1, 2);
+    static VAR3 = new ArgLength(1, 3);
+    static fixed(bytes) {
+        return new ArgLength(0, bytes);
+    }
     constructor(iterations, bytes) {
         this.iterations = iterations;
         this.bytes = bytes;
@@ -204,25 +210,34 @@ class Arg {
     static test(arg, value) {
         let encoded = Arg.encode(arg, value);
         let decoded = Arg.decode(arg, encoded);
-        //console.log("Arg test failed!");
+        //if (decoded !== encoded)
+        //	console.log("Arg test failed!");
         console.log(value);
         console.log(decoded);
         console.log(encoded);
     }
-    static int(byteCount, min) {
-        return new IntArg(byteCount, min);
+    static rawFixed(byteCount) {
+        return RawArg.fixed(byteCount);
     }
+    static strFixed(byteCount) {
+        return StrArg.fixed(byteCount);
+    }
+    /*static int(byteCount: number, min: number): IntArg {
+        return new IntArg(byteCount, min);
+    }*/
     static float(min, max, precision = 0.01) {
         return new FloatArg(min, max, precision);
     }
-    static str(iterCount = 1, byteCount = 2) {
+    /*static str(iterCount: number = 1, byteCount: number = 2): StrArg {
         return new StrArg(iterCount, byteCount);
-    }
+    }*/
     static choice(...choices) {
         return new ChoiceArg(...choices);
     }
     static array(arg, byteCount = 2) {
         return new ArrayArg(arg, byteCount);
+    }
+    static arrayShort() {
     }
     static branch(...paths) {
         return new BranchArg(paths);
@@ -239,9 +254,9 @@ class Arg {
     static optional(arg) {
         return Arg.default(arg, null);
     }
-    headerFootprint;
-    constructor(headerFootprint) {
-        this.headerFootprint = headerFootprint;
+    length;
+    constructor(length) {
+        this.length = length;
     }
     matches(value) {
         console.error("Override Arg.matches");
@@ -258,7 +273,7 @@ class Arg {
         console.error("Override Arg.decode");
     }
     streamDecode(stream) {
-        let byteCount = Arg.resolveHeader(stream, this.headerFootprint);
+        let byteCount = Arg.resolveHeader(stream, this.length);
         let bytes = stream.next(byteCount);
         return this.decode(bytes);
     }
@@ -277,6 +292,9 @@ class Arg {
     static STRING2 = this.str(2, 1);
     
     static BOOL = this.choice(false, true);*/
+    static RAW1;
+    static RAW2;
+    static RAW3;
     static UINT1;
     static UINT2;
     static UINT4;
@@ -286,15 +304,35 @@ class Arg {
     static INT4;
     static INT6;
     static CHAR;
-    static STRING1;
-    static STRING2;
+    static STR1;
+    static STR2;
+    static STR3;
     static BOOL;
 }
 exports.default = Arg;
+class RawArg extends Arg {
+    static fixed(bytes) {
+        return new RawArg(ArgLength.fixed(bytes));
+    }
+    constructor(length) {
+        super(length);
+    }
+    matches(value) {
+        return value instanceof Uint8Array;
+    }
+    streamEncode(value, stream) {
+        stream.write(Arg.createHeader(this.length, value.length));
+        stream.write(value);
+    }
+    streamDecode(stream) {
+        let byteCount = Arg.resolveHeader(stream, this.length);
+        return stream.nextArray(byteCount);
+    }
+}
 class ChoiceArg extends Arg {
     choices;
     constructor(...choices) {
-        super(new HeaderFootprint(0, Arg.calculateByteCount(choices.length)));
+        super(new ArgLength(0, Arg.calculateByteCount(choices.length)));
         this.choices = choices;
     }
     matches(value) {
@@ -304,7 +342,7 @@ class ChoiceArg extends Arg {
         let index = this.choices.indexOf(value);
         if (index < 0)
             console.error("Invalid ChoiceArg choice: ", value, " | ", this.choices);
-        return Arg.encodeInt(index, this.headerFootprint.bytes);
+        return Arg.encodeInt(index, this.length.bytes);
     }
     decode(bytes) {
         return this.choices[Arg.decodeInt(bytes)];
@@ -314,7 +352,7 @@ class IntArg extends Arg {
     min;
     max; // not inclusive
     constructor(byteCount, min = 0) {
-        super(new HeaderFootprint(0, byteCount));
+        super(new ArgLength(0, byteCount));
         this.min = min;
         this.max = min + Arg.calculateChoiceCount(byteCount);
     }
@@ -324,7 +362,7 @@ class IntArg extends Arg {
         return Number.isInteger(value) && value >= this.min && value < this.max;
     }
     encode(value) {
-        return Arg.encodeInt(value - this.min, this.headerFootprint.bytes);
+        return Arg.encodeInt(value - this.min, this.length.bytes);
     }
     decode(bytes) {
         return Arg.decodeInt(bytes) + this.min;
@@ -337,9 +375,9 @@ class FloatArg extends Arg {
     constructor(min, max, precision) {
         if (precision === undefined)
             precision = 0.01;
-        super(new HeaderFootprint(0, Arg.calculateByteCount((max - min) / precision)));
+        super(new ArgLength(0, Arg.calculateByteCount((max - min) / precision)));
         this.min = (min === undefined ? 0 : min);
-        this.max = this.min + precision * Arg.calculateChoiceCount(this.headerFootprint.bytes);
+        this.max = this.min + precision * Arg.calculateChoiceCount(this.length.bytes);
         this.precision = precision;
     }
     matches(value) {
@@ -348,15 +386,18 @@ class FloatArg extends Arg {
         return value >= this.min && value < this.max;
     }
     encode(value) {
-        return Arg.encodeFloat(value, this.min, this.precision, this.headerFootprint.bytes);
+        return Arg.encodeFloat(value, this.min, this.precision, this.length.bytes);
     }
     decode(bytes) {
         return Arg.decodeFloat(bytes, this.min, this.precision);
     }
 }
 class StrArg extends Arg {
-    constructor(iterations, bytes) {
-        super(new HeaderFootprint(iterations, bytes));
+    static fixed(bytes) {
+        return new StrArg(ArgLength.fixed(bytes));
+    }
+    constructor(length) {
+        super(length);
     }
     matches(value) {
         if (typeof value != "string")
@@ -364,7 +405,7 @@ class StrArg extends Arg {
         return true; // TODO: should probably length check
     }
     encode(value) {
-        return Arg.withHeader(this.headerFootprint, Arg.encodeStr(value));
+        return Arg.withHeader(this.length, Arg.encodeStr(value));
     }
     decode(bytes) {
         return Arg.decodeStr(bytes);
@@ -375,7 +416,7 @@ class ArrayArg extends Arg {
     constructor(arg, byteCount = 2) {
         // special length header that tells how many copies of the sublist you get
         // also, this is certified black magic
-        super(new HeaderFootprint(1, byteCount));
+        super(new ArgLength(1, byteCount));
         this.arg = arg;
     }
     matches(values) {
@@ -386,7 +427,7 @@ class ArrayArg extends Arg {
     /*public encode(values: Array<any>): Uint8Array {
         
         return Arg.joinByteArrays(
-            Arg.createHeader(this.headerFootprint, values.length), // header
+            Arg.createHeader(this.length, values.length), // header
             ...(values.map(value => { return Arg.encode(this.arg, value) })) // encoded values
         );
         
@@ -394,13 +435,13 @@ class ArrayArg extends Arg {
         
     }*/
     streamEncode(values, stream) {
-        stream.write(Arg.createHeader(this.headerFootprint, Array.isArray(values) ? values.length : values.size));
+        stream.write(Arg.createHeader(this.length, Array.isArray(values) ? values.length : values.size));
         //for (const value of values)
         //	Arg.streamEncode(this.arg, value, stream);
         Arg.streamEncodeAll(this.arg, values, stream);
     }
     streamDecode(stream) {
-        return Arg.streamDecodeAll(this.arg, Arg.resolveHeader(stream, this.headerFootprint), stream);
+        return Arg.streamDecodeAll(this.arg, Arg.resolveHeader(stream, this.length), stream);
         /*let decoded = new Array<any>();
         
         for (let i = 0; i < valueCount; i++) {
@@ -415,7 +456,7 @@ class DictArg extends Arg {
     keyArg;
     valueArg;
     constructor(keyArg, valueArg, byteCount = 2) {
-        super(new HeaderFootprint(1, byteCount));
+        super(new ArgLength(1, byteCount));
         this.keyArg = keyArg;
         this.valueArg = valueArg;
     }
@@ -429,7 +470,7 @@ class DictArg extends Arg {
     }
     streamEncode(obj, stream) {
         if (obj instanceof Map) {
-            stream.write(Arg.createHeader(this.headerFootprint, obj.size));
+            stream.write(Arg.createHeader(this.length, obj.size));
             for (const [key, value] of obj) {
                 Arg.streamEncode(this.keyArg, key, stream);
                 Arg.streamEncode(this.valueArg, value, stream);
@@ -437,7 +478,7 @@ class DictArg extends Arg {
         }
         else { // Generic object, probably a literal
             let keys = Object.keys(obj);
-            stream.write(Arg.createHeader(this.headerFootprint, keys.length));
+            stream.write(Arg.createHeader(this.length, keys.length));
             for (const key of keys) {
                 Arg.streamEncode(this.keyArg, key, stream);
                 Arg.streamEncode(this.valueArg, obj[key], stream);
@@ -445,7 +486,7 @@ class DictArg extends Arg {
         }
     }
     streamDecode(stream) {
-        let valueCount = Arg.resolveHeader(stream, this.headerFootprint);
+        let valueCount = Arg.resolveHeader(stream, this.length);
         let decoded = {};
         for (let i = 0; i < valueCount; i++) {
             let key = Arg.streamDecode(this.keyArg, stream);
@@ -458,7 +499,7 @@ class DictArg extends Arg {
 class BranchArg extends Arg {
     paths;
     constructor(paths, byteCount = 1) {
-        super(new HeaderFootprint(1, byteCount));
+        super(new ArgLength(1, byteCount));
         this.paths = Array.from(paths);
     }
     matches(value) {
@@ -472,7 +513,7 @@ class BranchArg extends Arg {
         for (let i = 0; i < this.paths.length; i++) {
             //console.log(i)
             if (Arg.matches(this.paths[i], value)) { // Use first matching path
-                stream.write(Arg.encodeInt(i, this.headerFootprint.bytes));
+                stream.write(Arg.encodeInt(i, this.length.bytes));
                 Arg.streamEncode(this.paths[i], value, stream);
                 return;
             }
@@ -480,7 +521,7 @@ class BranchArg extends Arg {
         console.error("No match found for BranchArg.");
     }
     streamDecode(stream) {
-        let path = Arg.resolveHeader(stream, this.headerFootprint);
+        let path = Arg.resolveHeader(stream, this.length);
         return Arg.streamDecode(// Header tells us which path to use
         this.paths[path], stream);
     }
@@ -489,7 +530,7 @@ class ConstArg extends Arg {
     value;
     mandatory;
     constructor(value, mandatory = true) {
-        super(new HeaderFootprint(0, 0));
+        super(new ArgLength(0, 0));
         this.value = value;
         this.mandatory = mandatory;
     }
@@ -515,17 +556,21 @@ class ConstArg extends Arg {
         return this.value;
     }
 }
-Arg.UINT1 = Arg.int(1, 0);
-Arg.UINT2 = Arg.int(2, 0);
-Arg.UINT4 = Arg.int(4, 0);
-Arg.UINT6 = Arg.int(6, 0);
-Arg.INT1 = Arg.int(1, -128);
-Arg.INT2 = Arg.int(2, -32768);
-Arg.INT4 = Arg.int(4, -2147483648);
-Arg.INT6 = Arg.int(6, -281474976710656);
-Arg.CHAR = Arg.str(0, 1);
-Arg.STRING1 = Arg.str(1, 1);
-Arg.STRING2 = Arg.str(1, 2);
+Arg.RAW1 = new RawArg(ArgLength.VAR1);
+Arg.RAW2 = new RawArg(ArgLength.VAR2);
+Arg.RAW3 = new RawArg(ArgLength.VAR3);
+Arg.UINT1 = new IntArg(1, 0);
+Arg.UINT2 = new IntArg(2, 0);
+Arg.UINT4 = new IntArg(4, 0);
+Arg.UINT6 = new IntArg(6, 0);
+Arg.INT1 = new IntArg(1, -128);
+Arg.INT2 = new IntArg(2, -32768);
+Arg.INT4 = new IntArg(4, -2147483648);
+Arg.INT6 = new IntArg(6, -281474976710656);
+Arg.CHAR = StrArg.fixed(1);
+Arg.STR1 = new StrArg(ArgLength.VAR1);
+Arg.STR2 = new StrArg(ArgLength.VAR2);
+Arg.STR3 = new StrArg(ArgLength.VAR3);
 Arg.BOOL = Arg.choice(false, true);
 /*let arg = {
     peerID: Arg.UINT2,
@@ -574,6 +619,10 @@ Arg.test({
 //console.log(encoded, Arg.decode(arg, encoded))*/
 //console.log(Arg.decode(Arg.INT1, Arg.encode(Arg.INT1, 120)));
 //console.log(Arg.encode(arg, 1));
+/*Arg.test(Arg.RAW1, new Uint8Array([1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]));
+Arg.test(Arg.RAW2, new Uint8Array([1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]));
+Arg.test(Arg.RAW3, new Uint8Array([1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]));
+Arg.test(Arg.rawFixed(5), new Uint8Array([4, 5, 7, 10, 12]));*/
 /*let arg = Arg.UINT1;
 let argList = [ arg, Arg.array([ arg, arg ]), { a: [ arg, arg ], b: arg } ];
 

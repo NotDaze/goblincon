@@ -8,7 +8,6 @@ import {
 	
 	Packet,
 	Message,
-	MessageDomain,
 	MessageHandler,
 	
 	//LocalMonoPeer,
@@ -19,16 +18,18 @@ import {
 import LocalMeshClient, { RemoteMeshClient } from "./Network/mesh_client"
 import Arg from "./Network/arg"
 
-const TEST = new Message(Arg.STRING2);
-const MESSAGE_ROOT = new MessageDomain([
-	TEST
-]);
+import GameMessages, {
+	GAME_CREATE_REQUEST,
+	GAME_CREATE_RESPONSE,
+	GAME_JOIN_REQUEST
+} from "../MessageLists/game"
+
 
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
 
 // Host creates game (via server)
-// Server generates a token
-// Server gives token to host
+// Server generates a room ID thing
+// Server gives room ID to host
 // Clients connect to server
 // 
 
@@ -46,20 +47,30 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	
 	constructor(serverUrl: string, protocols: Array<string> = []) {
 		
-		super(MESSAGE_ROOT, RemoteGameClient, serverUrl, protocols, new MessageHandler<RemoteGameClient>);
+		super(RemoteGameClient, serverUrl, protocols);
+		this.addServerMessages(GameMessages);
 		
-		this.connected.connect(() => {
+		console.log(this.getMessageID(GAME_CREATE_REQUEST));
+		
+		this.onServerMessage(GAME_CREATE_RESPONSE, (packet: Packet<void>) => {
 			
-			this.sendAll(TEST, "Hello world!");
+			console.log(`Game created: ${packet.data}`);
+			
+			this.joinGame(packet.data);
 			
 		});
 		
-		this.onMessage(TEST, (packet: Packet<RemoteGameClient>) => {
-			
-			console.log(packet.peer.getID(), ": ", packet.data);
-			
+		this.socket.connected.connect(() => {
+			this.createGame();
 		});
 		
+	}
+	
+	createGame() {
+		this.sendServer(GAME_CREATE_REQUEST);
+	}
+	joinGame(code: string) {
+		this.sendServer(GAME_JOIN_REQUEST, code);
 	}
 	
 	

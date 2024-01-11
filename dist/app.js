@@ -10,52 +10,31 @@ import {
     SocketServer,
     Room
 } from "./Modules/Network/wss"*/
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 //import { SignalingSocket } from "./Modules/Network/ss"
-const signaling_server_1 = __importStar(require("./Modules/Network/signaling_server"));
+//import SignalingServer, { SignalingSocket } from "./Modules/Network/signaling_server"
+const path_1 = __importDefault(require("path"));
 const express_1 = __importDefault(require("express"));
 //import http from "http"
+const game_server_1 = __importDefault(require("./Private/game_server"));
 const PORT = 5050;
 const app = (0, express_1.default)();
 //const appServer: http.Server = http.createServer(app);
 const httpServer = app.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });
-const signalingServer = new signaling_server_1.default({ server: httpServer, clientTracking: false }, signaling_server_1.SignalingSocket);
+const gameServer = new game_server_1.default({ server: httpServer, clientTracking: false });
 app.get("/", (req, res) => {
-    app.use(express_1.default.static(__dirname + "/Client"));
-    res.sendFile(__dirname + "/Client/index.html");
+    app.use(express_1.default.static(path_1.default.join(__dirname, "/Public")));
+    res.sendFile(__dirname + "/Public/index.html");
 });
-signalingServer.connected.connect(() => {
+gameServer.connected.connect(() => {
     console.log("Signaling!");
 });
-signalingServer.peerConnected.connect((peer) => {
+gameServer.peerConnected.connect((peer) => {
     //console.log("Client connected!");
 });
 /*server.socketConnected.connect((socket: Socket) => {

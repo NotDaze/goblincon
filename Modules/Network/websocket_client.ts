@@ -7,7 +7,6 @@ import {
 	
 	Packet,
 	Message,
-	MessageDomain,
 	MessageHandler,
 	
 	LocalMonoPeer,
@@ -25,9 +24,9 @@ export default class Socket extends LocalMonoPeer {
 	
 	private ws: WebSocket;
 	
-	constructor(messageRoot: MessageDomain, url: string, protocols?: Array<string>, messageHandler = new MessageHandler<void>()) {
+	constructor(url: string, protocols?: Array<string>) {
 		
-		super(messageRoot, messageHandler);
+		super();
 		
 		this.ws = new WebSocket(url, protocols);
 		

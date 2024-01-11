@@ -22,22 +22,14 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RemoteGameClient = void 0;
-const network_1 = require("./Network/network");
 const mesh_client_1 = __importStar(require("./Network/mesh_client"));
-const arg_1 = __importDefault(require("./Network/arg"));
-const TEST = new network_1.Message(arg_1.default.STRING2);
-const MESSAGE_ROOT = new network_1.MessageDomain([
-    TEST
-]);
+const game_1 = __importStar(require("../MessageLists/game"));
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
 // Host creates game (via server)
-// Server generates a token
-// Server gives token to host
+// Server generates a room ID thing
+// Server gives room ID to host
 // Clients connect to server
 // 
 class RemoteGameClient extends mesh_client_1.RemoteMeshClient {
@@ -48,13 +40,22 @@ class RemoteGameClient extends mesh_client_1.RemoteMeshClient {
 exports.RemoteGameClient = RemoteGameClient;
 class LocalGameClient extends mesh_client_1.default {
     constructor(serverUrl, protocols = []) {
-        super(MESSAGE_ROOT, RemoteGameClient, serverUrl, protocols, new network_1.MessageHandler);
-        this.connected.connect(() => {
-            this.sendAll(TEST, "Hello world!");
+        super(RemoteGameClient, serverUrl, protocols);
+        this.addServerMessages(game_1.default);
+        console.log(this.getMessageID(game_1.GAME_CREATE_REQUEST));
+        this.onServerMessage(game_1.GAME_CREATE_RESPONSE, (packet) => {
+            console.log(`Game created: ${packet.data}`);
+            this.joinGame(packet.data);
         });
-        this.onMessage(TEST, (packet) => {
-            console.log(packet.peer.getID(), ": ", packet.data);
+        this.socket.connected.connect(() => {
+            this.createGame();
         });
+    }
+    createGame() {
+        this.sendServer(game_1.GAME_CREATE_REQUEST);
+    }
+    joinGame(code) {
+        this.sendServer(game_1.GAME_JOIN_REQUEST, code);
     }
 }
 exports.default = LocalGameClient;

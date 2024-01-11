@@ -9,8 +9,8 @@ class Socket extends network_1.LocalMonoPeer {
     closed = new signal_1.default();
     //public error = new Signal<void>();
     ws;
-    constructor(messageRoot, url, protocols, messageHandler = new network_1.MessageHandler()) {
-        super(messageRoot, messageHandler);
+    constructor(url, protocols) {
+        super();
         this.ws = new WebSocket(url, protocols);
         this.ws.binaryType = "arraybuffer";
         this.ws.onopen = (e) => { this.state.set(network_1.ConnectionState.CONNECTED); };

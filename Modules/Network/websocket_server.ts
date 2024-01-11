@@ -23,7 +23,7 @@ import {
 	
 	//Packet,
 	//Message,
-	MessageDomain,
+	//MessageDomain,
 	//MessageHandler,
 	
 	//Group,
@@ -203,9 +203,9 @@ export class SocketServer<SocketType extends Socket> extends LocalMultiPeer<Sock
 	//protected socketCreation = new Signal<WebSocket>();
 	
 	
-	constructor(messageRoot: MessageDomain, socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
+	constructor(socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
 		
-		super(messageRoot);
+		super();
 		
 		//this.messageIndex = messageIndex;
 		this.wss = new WebSocketServer(wssArgs);

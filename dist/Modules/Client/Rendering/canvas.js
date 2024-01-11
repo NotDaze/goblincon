@@ -1,32 +1,40 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const signal_1 = __importDefault(require("../../Core/signal"));
 class Canvas {
-    sizeChanged = new signal_1.default();
     ctx;
-    stretchFactor = 1.0;
-    get element() { return this.ctx.canvas; }
-    get left() {
+    get element() {
+        return this.ctx.canvas;
+    }
+    get sourceWidth() {
+        return this.element.width;
+    }
+    get sourceHeight() {
+        return this.element.height;
+    }
+    get clientWidth() {
+        return this.element.clientWidth;
+    }
+    get clientHeight() {
+        return this.element.clientHeight;
+    }
+    /*get left(): number {
         return 0;
     }
-    get right() {
+    get right(): number {
         return this.element.width / this.stretchFactor;
     }
-    get top() {
+    get top(): number {
         return 0;
     }
-    get bottom() {
+    get bottom(): number {
         return this.element.height / this.stretchFactor;
     }
-    get width() {
+    get width(): number {
         return this.right - this.left;
     }
-    get height() {
+    get height(): number {
         return this.bottom - this.top;
-    }
+    }*/
     // Constructors and related methods
     static getCanvasElementContext(canvasElement) {
         let ctx = canvasElement.getContext("2d");
@@ -35,105 +43,37 @@ class Canvas {
         else
             return ctx;
     }
-    static createElement(parent) {
-        let canvasElement = document.createElement("canvas");
-        canvasElement.style.display = "block";
-        canvasElement.style.margin = "auto";
-        canvasElement.textContent = "You don't have canvas support! Try switching to a different browser.";
-        if (parent !== undefined)
-            parent.appendChild(canvasElement);
-        return canvasElement;
-    }
     static fromElement(canvasElement) {
         return new Canvas(this.getCanvasElementContext(canvasElement));
     }
-    static create() {
-        return Canvas.fromElement(Canvas.createElement());
-    }
-    static createWithParent(parent) {
-        return Canvas.fromElement(Canvas.createElement(parent));
-    }
     constructor(ctx) {
         this.ctx = ctx;
-        //this.element = ctx.canvas;
-        //this.width = this.element.width;
-        //this.height = this.element.height;
-        //this.element.addEventListener("keydown", (ev: KeyboardEvent) => this.keyDown.emit(ev.key.toLowerCase()));
-        //this.element.addEventListener("keyup", (ev: KeyboardEvent) => this.keyUp.emit(ev.key.toLowerCase()));
-        //this.keyDown.connect((key: string) => this.pressedKeys.add(key));
-        //this.keyUp.connect((key: string) => this.pressedKeys.delete(key));
     }
-    // Stretch and sizing
-    getStretchFactor() {
-        return this.stretchFactor;
+    mapX(x) {
+        return x * this.sourceWidth / this.clientWidth;
     }
-    setStretchFactor(factor) {
-        this.scale(factor / this.stretchFactor);
-        this.stretchFactor = factor;
+    mapY(y) {
+        return y * this.sourceHeight / this.clientHeight;
     }
-    setSize(width, height) {
-        //let transform = this.ctx.getTransform();
-        this.element.width = width;
-        this.element.height = height;
-        //this.ctx.setTransform(transform);
-        this.sizeChanged.emit();
+    unmapX(x) {
+        return x * this.clientWidth / this.sourceWidth;
     }
-    fitResize(width, height, stretchFactor) {
-        this.setStretchFactor(stretchFactor);
-        this.setSize(width, height);
+    unmapY(y) {
+        return y * this.clientHeight / this.sourceHeight;
     }
-    fit(boundWidth, boundHeight, width, height) {
-        //this.width = width;
-        //this.height = height;
-        // document.documentElement.clientWidth & clientHeight as backup?
-        let aspect = width / height;
-        let boundAspect = boundWidth / boundHeight;
-        if (aspect > boundAspect) {
-            // canvas is shorter than the viewport, max out width
-            this.fitResize(boundWidth, boundWidth / aspect, boundWidth / width);
-        }
-        else {
-            // canvas is narrower than the viewport, max out height
-            this.fitResize(boundHeight * aspect, boundHeight, boundHeight / height);
-        }
+    /*map(x: number, y: number): [number, number] {
+        return [this.mapX(x), this.mapY(y)];
     }
-    fitWindow(width, height) {
-        this.fit(window.innerWidth, window.innerHeight, width, height);
-    }
-    fitWindowPersistent(width, height) {
-        this.fitWindow(width, height);
-        window.addEventListener("resize", () => this.fitWindow(width, height));
-        // Wants a way to clear this event listener
-    }
-    fitElement(element, width, height) {
-        this.fit(element.clientWidth, element.clientHeight, width, height);
-    }
-    fitParent(width, height) {
-        if (this.element.parentElement !== null)
-            this.fitElement(this.element.parentElement, width, height);
-    }
-    fitElementPersistent(element, width, height) {
-        //let el = WeakRef(element);
-        this.fitElement(element, width, height);
-        //if (this.resizeObserver !== undefined)
-        //	this.resizeObserver.disconnect();
-        //this.resizeObserver = new ResizeObserver((entries: Array<ResizeObserverEntry>) => {
-        let resizeObserver = new ResizeObserver((entries) => {
-            if (entries.length !== 1)
-                throw new Error();
-            this.fit(entries[0].contentRect.width, entries[0].contentRect.height, width, height);
-        });
-        //this.resizeObserver.observe(element);
-        resizeObserver.observe(element);
-    }
-    fitParentPersistent(width, height) {
-        if (this.element.parentElement === null)
-            return;
-        this.fitElementPersistent(this.element.parentElement, width, height);
-    }
+    unmap(x: number, y: number): void {
+        
+    }*/
     // 
-    apply(...canvases) {
+    reset() {
+        this.resetTransform();
         this.clear();
+    }
+    apply(...canvases) {
+        this.reset();
         for (const canvas of canvases)
             this.ctx.drawImage(canvas.element, 0, 0, this.element.width, this.element.height);
     }
@@ -144,11 +84,17 @@ class Canvas {
     resetTransform() {
         //this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         //this.scale(this.stretch);
-        this.ctx.setTransform(this.stretchFactor, 0, 0, this.stretchFactor, 0, 0);
+        this.ctx.resetTransform();
     }
     // Color
     static rgbaToStyle(r, g, b, a = 1) {
         return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${Math.round(a * 255)})`;
+    }
+    getFillStyle() {
+        return this.ctx.fillStyle;
+    }
+    getStrokeStyle() {
+        return this.ctx.strokeStyle;
     }
     setFill(r, g, b, a = 1) {
         this.setFillStyle(Canvas.rgbaToStyle(r, g, b, a));
@@ -168,15 +114,25 @@ class Canvas {
     setLineCap(cap) {
         this.ctx.lineCap = cap;
     }
+    /*protected withoutTransform<T>(callback: () => T): T {
+        
+        let transform = this.getTransform();
+        
+        let out = callback();
+        
+        return out;
+        
+    }*/
     clear() {
-        this.clearRect(0, 0, this.width, this.height);
+        this.clearRect(0, 0, this.sourceWidth, this.sourceHeight);
     }
     wipe(r, g, b, a = 1.0) {
         this.wipeStyle(Canvas.rgbaToStyle(r, g, b, a));
     }
     wipeStyle(style) {
+        let fillStyle = this.getFillStyle();
         this.setFillStyle(style);
-        this.fillRect(0, 0, this.width, this.height);
+        this.fillRect(0, 0, this.sourceWidth, this.sourceHeight);
         // Maybe reset fillStyle to what it was before
     }
     // Shapes
@@ -214,15 +170,6 @@ class Canvas {
         this.ctx.fill();
         this.ctx.stroke();
     }
-    /*fillCircle(x: number, y: number, r: number): void {
-        this.fillEllipse(x, y, r, r);
-    }
-    strokeCircle(x: number, y: number, r: number): void {
-        this.strokeEllipse(x, y, r, r);
-    }
-    circle(x: number, y: number, r: number): void {
-        this.ellipse(x, y, r, r);
-    }*/
     line(x1, y1, x2, y2) {
         this.ctx.beginPath();
         this.ctx.moveTo(x1, y1);

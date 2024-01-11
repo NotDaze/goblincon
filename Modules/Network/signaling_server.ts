@@ -40,7 +40,7 @@ import SignalingMessages, {
 	MESH_STATUS_UPDATE,
 	MESH_CLIENT_STATUS_UPDATE
 	
-} from "./MessageIndices/signaling"
+} from "./MessageLists/signaling"
 
 /*const MESSAGE_INDEX = new MessageIndex();
 
@@ -132,7 +132,7 @@ MESSAGE_INDEX.addCondition( // SDP/ICE forward has room and valid target //
 	
 }*/
 
-class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
+export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
 	
 	//public started = new Signal<void>();
 	
@@ -148,7 +148,7 @@ class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
 	//private nodeIndex = new Map<number, SignalingSocket>();
 	private stable = false;
 	
-	private startThreshold = 2;
+	//private startThreshold = 2;
 	
 	protected get ids() {
 		return this.peerIndex.ids;
@@ -316,7 +316,7 @@ class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
 	}
 	
 	public canInitialize(): boolean {
-		return this.state.is(ConnectionState.NEW) && this.getPeerCount() >= this.startThreshold;
+		return this.state.is(ConnectionState.NEW); // && this.getPeerCount() >= this.startThreshold;
 	}
 	public initialize(): void {
 		
@@ -510,24 +510,30 @@ export class SignalingSocket extends Socket {
 	
 }
 
-export default class SignalingServer<SocketType extends SignalingSocket = SignalingSocket> extends SocketServer<SocketType> {
+export default class SignalingServer<SocketType extends SignalingSocket> extends SocketServer<SocketType> {
+	
+	meshCreated = new Signal<Mesh<SocketType>>();
+	meshDestroyed = new Signal<Mesh<SocketType>>();
 	
 	//static MESSAGE_INDEX = new MessageIndex();
 	
 	//private matches = new Array<Mesh>();
 	protected meshes = new Set<Mesh<SocketType>>();
 	
+	//private meshClass: { new(...peers: Array<SocketType>): MeshType };
 	
-	constructor(wssArgs = SocketServer.WSS_ARGS, socketClass: { new(ws: WebSocket): SocketType }) {
+	constructor(socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
 		
 		//let b = SignalingSocket;
 		//let a = new b();
 		
-		super(SignalingMessages, socketClass, wssArgs);
+		super(socketClass, wssArgs);
 		
-		this.peerConnected.connect((peer: SocketType) => {
-			this.findMesh(peer).add(peer);
-		});
+		this.addMessages(SignalingMessages);
+		
+		//this.peerConnected.connect((peer: SocketType) => {
+		//	this.findMesh(peer).add(peer);
+		//});
 		
 		
 		this.addCondition( // Has active mesh
@@ -642,24 +648,37 @@ export default class SignalingServer<SocketType extends SignalingSocket = Signal
 		return new SignalingSocket(ws);
 	}
 	
-	public createMesh(): Mesh<SocketType> {
+	public createMesh(...peers: Array<SocketType>): Mesh<SocketType> {
 		
 		let mesh = new Mesh<SocketType>(this, this.meshes);
 		this.meshes.add(mesh);
 		
-		console.log("Mesh created");
-		
 		mesh.disconnected.connect(() => {
 			
 			this.meshes.delete(mesh);
+			this.meshDestroyed.emit(mesh);
+			
 			console.log("Mesh disconnected");
 			
 		});
 		
+		mesh.add(...peers);
+		
+		this.meshCreated.emit(mesh);
+		console.log("Mesh created");
+		
 		return mesh;
 		
 	}
-	public findMesh(socket: SignalingSocket): Mesh<SocketType> {
+	public destroyMesh(mesh: Mesh<SocketType>) {
+		
+		if (!this.meshes.has(mesh))
+			return;
+		
+		mesh.kill();
+		
+	}
+	/*public findMesh(socket: SignalingSocket): Mesh<SocketType> {
 		
 		for (const mesh of this.meshes)
 			if (mesh.isJoinable())
@@ -667,7 +686,7 @@ export default class SignalingServer<SocketType extends SignalingSocket = Signal
 		
 		return this.createMesh();
 		
-	}
+	}*/
 	
 	public getPeerMesh(socket: SignalingSocket): Mesh<SocketType> | undefined {
 		return socket.getStratumGroup(this.meshes);

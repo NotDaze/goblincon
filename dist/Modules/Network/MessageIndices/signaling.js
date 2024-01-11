@@ -30,17 +30,17 @@ exports.MESH_STABILIZED = new network_1.Message();
 exports.MESH_SESSION_DESCRIPTION_CREATED = new network_1.Message({
     peerID: arg_1.default.UINT2,
     type: arg_1.default.choice("offer", "answer"),
-    sdp: arg_1.default.STRING2
+    sdp: arg_1.default.STR2
 });
 exports.MESH_ICE_CANDIDATE_CREATED = new network_1.Message({
     peerID: arg_1.default.UINT2,
     //media: Arg.STRING1,
     //index: Arg.UINT2,
     //name: Arg.STRING2
-    candidate: arg_1.default.STRING2,
-    sdpMid: arg_1.default.STRING2,
+    candidate: arg_1.default.STR2,
+    sdpMid: arg_1.default.STR2,
     sdpMLineIndex: arg_1.default.UINT2,
-    usernameFragment: arg_1.default.STRING2
+    usernameFragment: arg_1.default.STR2
 });
 exports.MESH_STATUS_UPDATE = new network_1.Message();
 /*export const MESH_CLIENT_STATUS_UPDATE = new Message([{
@@ -57,7 +57,7 @@ exports.MESH_CLIENT_STATUS_UPDATE = new network_1.Message([
     MESSAGE_ROOT.findMessage(new ByteIStream(new Uint8Array())),
     MESSAGE_ROOT.findMessage(new ByteIStream(new Uint8Array([1, 0])))
 );*/
-const MESSAGE_ROOT = new network_1.MessageDomain([
+const MESSAGE_ROOT = [
     exports.MESH_INITIALIZE,
     exports.MESH_TERMINATE,
     exports.MESH_CONNECT_PEERS,
@@ -67,5 +67,5 @@ const MESSAGE_ROOT = new network_1.MessageDomain([
     exports.MESH_ICE_CANDIDATE_CREATED,
     exports.MESH_STATUS_UPDATE,
     exports.MESH_CLIENT_STATUS_UPDATE
-]);
+];
 exports.default = MESSAGE_ROOT;

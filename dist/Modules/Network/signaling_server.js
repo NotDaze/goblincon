@@ -26,13 +26,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SignalingSocket = void 0;
+exports.SignalingSocket = exports.Mesh = void 0;
 const state_1 = __importDefault(require("../Core/state"));
 const signal_1 = __importDefault(require("../Core/signal"));
 //import Arg from "./arg"
 const network_1 = require("./network");
 const websocket_server_1 = require("./websocket_server");
-const signaling_1 = __importStar(require("./MessageIndices/signaling"));
+const signaling_1 = __importStar(require("./MessageLists/signaling"));
 /*const MESSAGE_INDEX = new MessageIndex();
 
 //const STUN = MESSAGE_INDEX.newMessage(Message.RAW);
@@ -127,7 +127,7 @@ class Mesh extends network_1.Group {
     peerIndex = new network_1.RemotePeerIndex();
     //private nodeIndex = new Map<number, SignalingSocket>();
     stable = false;
-    startThreshold = 2;
+    //private startThreshold = 2;
     get ids() {
         return this.peerIndex.ids;
     }
@@ -240,7 +240,7 @@ class Mesh extends network_1.Group {
         return this.state.any(network_1.ConnectionState.NEW, network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED) && !this.isFull();
     }
     canInitialize() {
-        return this.state.is(network_1.ConnectionState.NEW) && this.getPeerCount() >= this.startThreshold;
+        return this.state.is(network_1.ConnectionState.NEW); // && this.getPeerCount() >= this.startThreshold;
     }
     initialize() {
         this.state.set(network_1.ConnectionState.CONNECTING);
@@ -323,6 +323,7 @@ class Mesh extends network_1.Group {
         // maybe verify that the match has all the provided IDs
     }
 }
+exports.Mesh = Mesh;
 class SignalingSocket extends websocket_server_1.Socket {
     meshID = -1;
     stable = false;
@@ -381,16 +382,20 @@ class SignalingSocket extends websocket_server_1.Socket {
 }
 exports.SignalingSocket = SignalingSocket;
 class SignalingServer extends websocket_server_1.SocketServer {
+    meshCreated = new signal_1.default();
+    meshDestroyed = new signal_1.default();
     //static MESSAGE_INDEX = new MessageIndex();
     //private matches = new Array<Mesh>();
     meshes = new Set();
-    constructor(wssArgs = websocket_server_1.SocketServer.WSS_ARGS, socketClass) {
+    //private meshClass: { new(...peers: Array<SocketType>): MeshType };
+    constructor(socketClass, wssArgs = websocket_server_1.SocketServer.WSS_ARGS) {
         //let b = SignalingSocket;
         //let a = new b();
-        super(signaling_1.default, socketClass, wssArgs);
-        this.peerConnected.connect((peer) => {
-            this.findMesh(peer).add(peer);
-        });
+        super(socketClass, wssArgs);
+        this.addMessages(signaling_1.default);
+        //this.peerConnected.connect((peer: SocketType) => {
+        //	this.findMesh(peer).add(peer);
+        //});
         this.addCondition(// Has active mesh
         [
             signaling_1.MESH_CLIENT_STATUS_UPDATE,
@@ -469,22 +474,33 @@ class SignalingServer extends websocket_server_1.SocketServer {
     createSocket(ws) {
         return new SignalingSocket(ws);
     }
-    createMesh() {
+    createMesh(...peers) {
         let mesh = new Mesh(this, this.meshes);
         this.meshes.add(mesh);
-        console.log("Mesh created");
         mesh.disconnected.connect(() => {
             this.meshes.delete(mesh);
+            this.meshDestroyed.emit(mesh);
             console.log("Mesh disconnected");
         });
+        mesh.add(...peers);
+        this.meshCreated.emit(mesh);
+        console.log("Mesh created");
         return mesh;
     }
-    findMesh(socket) {
+    destroyMesh(mesh) {
+        if (!this.meshes.has(mesh))
+            return;
+        mesh.kill();
+    }
+    /*public findMesh(socket: SignalingSocket): Mesh<SocketType> {
+        
         for (const mesh of this.meshes)
             if (mesh.isJoinable())
                 return mesh;
+        
         return this.createMesh();
-    }
+        
+    }*/
     getPeerMesh(socket) {
         return socket.getStratumGroup(this.meshes);
     }

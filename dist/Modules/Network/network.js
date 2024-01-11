@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Group = exports.RemotePeer = exports.LocalMultiPeer = exports.LocalMonoPeer = exports.RemotePeerIndex = exports.MessageHandler = exports.Message = exports.MessageDomain = exports.Packet = exports.ConnectionState = exports.TransferMode = void 0;
+exports.Group = exports.RemotePeer = exports.LocalMultiPeer = exports.LocalMonoPeer = exports.RemotePeerIndex = exports.MessageHandler = exports.Message = exports.Packet = exports.ConnectionState = exports.TransferMode = void 0;
 const state_1 = __importDefault(require("../Core/state"));
 const id_index_1 = __importDefault(require("../Core/id_index"));
 const signal_1 = __importStar(require("../Core/signal"));
@@ -62,62 +62,7 @@ class Packet {
     }
 }
 exports.Packet = Packet;
-class MessageNode {
-    //protected address: Uint8Array;
-    /*constructor(address: Uint8Array) {
-        this.address = address;
-    }*/
-    findMessage(stream) {
-        console.error("Overwrite MessageNode.findMessage()");
-        return undefined;
-    }
-}
-class MessageDomain extends MessageNode {
-    //private nodes: Map<;
-    nodes = new Array();
-    idByteCount;
-    constructor(nodes, idByteCount = 1) {
-        //super(address);
-        super();
-        this.idByteCount = idByteCount;
-        //this.nodes = Array.from(nodes);
-        this.nodes = Array.from(nodes);
-    }
-    *[Symbol.iterator]() {
-        for (const node of this.nodes)
-            yield node;
-    }
-    findMessage(stream) {
-        let id = arg_1.default.decodeInt(stream.next(this.idByteCount));
-        let next = this.nodes[id];
-        if (next === undefined) {
-            //console.error("Invalid domain node ID: ", this.address, " | ", id, " | ", this.nodes.ids);
-            console.error("Invalid domain node ID: ", id);
-            return undefined;
-        }
-        return next.findMessage(stream);
-    }
-    /*private createNodeAddress(id = this.nodes.size): Uint8Array {
-        
-        //let id = this.nodes.getNextID();
-        
-        //let address = new Uint8Array(this.address.length + this.idByteCount);
-        //address.set(this.address, 0);
-        //address.set(this.)
-        
-        return Arg.joinByteArrays(
-            this.address,
-            Arg.encodeInt(id, this.idByteCount)
-        );
-        
-    }*/
-    //public addNode(node: MessageNode): void {}
-    getIdByteCount() {
-        return this.idByteCount;
-    }
-}
-exports.MessageDomain = MessageDomain;
-class Message extends MessageNode {
+class Message {
     //static META_TIMESTAMP = symbol("META_TIMESTAMP");
     /*static fromJSON() {
         
@@ -127,7 +72,7 @@ class Message extends MessageNode {
     transferMode; // Not sure this is actually necessary, but eh
     //private conditions = new Array<(packet: Packet) => boolean>;
     constructor(arg, transferMode = TransferMode.RELIABLE) {
-        super();
+        //super();
         this.arg = arg;
         this.transferMode = transferMode;
     }
@@ -389,22 +334,28 @@ class Peer {
     }
 }
 class LocalPeer extends Peer {
-    messageRoot;
-    addresses = new Map();
+    messages = new Array();
     messageHandler;
-    constructor(messageRoot, messageHandler = new MessageHandler()) {
+    constructor() {
         super();
-        this.messageRoot = messageRoot;
-        this.messageHandler = messageHandler;
-        this.indexAddresses(messageRoot);
+        //this.messageRoot = messageRoot;
+        //this.messageHandler = messageHandler;
+        this.messageHandler = new MessageHandler();
+        //this.indexAddresses(messageRoot);
     }
-    indexAddresses(node, address = new Uint8Array()) {
+    /*private indexAddresses(node: MessageNode, address = new Uint8Array()): void {
+        
         if (node instanceof MessageDomain) {
+            
             let i = 0;
+            
             for (const child of node) {
-                this.indexAddresses(child, arg_1.default.joinByteArrays(address, arg_1.default.encodeInt(i, node.getIdByteCount())));
+                
+                this.indexAddresses(child, Arg.joinByteArrays(address, Arg.encodeInt(i, node.getIdByteCount())));
                 i++;
+                
             }
+            
         }
         else if (node instanceof Message) {
             this.addresses.set(node, address);
@@ -412,6 +363,23 @@ class LocalPeer extends Peer {
         else {
             // Throw?
         }
+        
+    }*/
+    get idByteCount() {
+        return arg_1.default.calculateByteCount(this.messages.length);
+    }
+    hasMessage(message) {
+        return this.messages.includes(message);
+    }
+    getMessageID(message) {
+        return this.messages.indexOf(message);
+    }
+    addMessage(message) {
+        this.messages.push(message);
+    }
+    addMessages(messages) {
+        for (const message of messages)
+            this.addMessage(message);
     }
     createPackets(peer, raw) {
         //console.log(raw);
@@ -420,7 +388,8 @@ class LocalPeer extends Peer {
         while (!stream.complete) {
             //let messageID = Arg.decodeInt(stream.next(this.idByteCount));
             //let message = this.messages[messageID];
-            let message = this.messageRoot.findMessage(stream);
+            let id = arg_1.default.decodeInt(stream.next(this.idByteCount));
+            let message = this.messages[id];
             if (!message) {
                 console.error("Unrecognized Message | ", raw);
                 break;
@@ -432,22 +401,17 @@ class LocalPeer extends Peer {
         return packets;
     }
     streamCreateRaw(message, data, stream) {
-        let address = this.getMessageAddress(message);
-        if (address === undefined)
+        //let address = this.getMessageAddress(message);
+        let id = this.getMessageID(message);
+        if (id < 0)
             throw new Error("Invalid message for LocalPeer.streamCreateRaw()");
-        stream.write(address);
+        stream.write(arg_1.default.encodeInt(id, this.idByteCount));
         message.streamEncode(data, stream);
     }
     createRaw(message, data) {
         let stream = new byteostream_1.default();
         this.streamCreateRaw(message, data, stream);
         return stream.bytes;
-    }
-    hasMessage(message) {
-        return this.addresses.has(message);
-    }
-    getMessageAddress(message) {
-        return this.addresses.get(message);
     }
     //private handleRaw(peer: RemotePeer, raw: Uint8Array): void {
     //	this.handlePackets(this.messageIndex.createPackets(peer, raw));
@@ -468,16 +432,31 @@ class LocalPeer extends Peer {
     /*public newMessage(arg?: any, transferMode = TransferMode.RELIABLE): Message {
         return this.messageDomain.newMessage(arg, transferMode);
     }*/
+    verifyHasMessages(messages) {
+        if (messages instanceof Message) {
+            if (!this.hasMessage(messages))
+                throw new Error("Invalid LocalPeer message.");
+        }
+        else {
+            for (const message of messages)
+                if (!this.hasMessage(message))
+                    throw new Error("Invalid LocalPeer message.");
+        }
+    }
     addCondition(messages, condition) {
+        this.verifyHasMessages(messages);
         this.messageHandler.addCondition(messages, condition);
     }
     removeCondition(messages, condition) {
+        this.verifyHasMessages(messages);
         this.messageHandler.removeCondition(messages, condition);
     }
     addCallback(message, callback) {
+        this.verifyHasMessages(message);
         this.messageHandler.addCallback(message, callback);
     }
     removeCallback(message, callback) {
+        this.verifyHasMessages(message);
         this.messageHandler.removeCallback(message, callback);
     }
     onMessage(message, callback) {
@@ -485,8 +464,8 @@ class LocalPeer extends Peer {
     }
 }
 class LocalMonoPeer extends LocalPeer {
-    constructor(messageRoot, messageHandler = new MessageHandler()) {
-        super(messageRoot, messageHandler);
+    constructor() {
+        super();
     }
     send(message, data) {
     }

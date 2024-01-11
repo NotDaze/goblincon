@@ -32,7 +32,7 @@ const signal_1 = __importDefault(require("../Core/signal"));
 const network_1 = require("./network");
 //import Arg from "../Network/arg"
 const websocket_client_1 = __importDefault(require("./websocket_client"));
-const signaling_1 = __importStar(require("./MessageIndices/signaling"));
+const signaling_1 = __importStar(require("./MessageLists/signaling"));
 /*export enum MeshStatus {
     
     PENDING,
@@ -263,9 +263,10 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     clientClass;
     stable = false;
     fullyConnected = false;
-    constructor(messageRoot, remoteClientClass, serverUrl, protocols = [], messageHandler = new network_1.MessageHandler()) {
-        super(messageRoot, messageHandler);
-        this.socket = new websocket_client_1.default(signaling_1.default, serverUrl, protocols);
+    constructor(remoteClientClass, serverUrl, protocols = []) {
+        super();
+        this.socket = new websocket_client_1.default(serverUrl, protocols);
+        this.addServerMessages(signaling_1.default);
         this.clientClass = remoteClientClass;
         //console.log(this.socket.messageRoot);
         //console.log(this.socket.messageRoot.findMessage(new ByteIStream(new Uint8Array([8, 0]))))
@@ -337,7 +338,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         this.initMessageHandling();
     }
     initMessageHandling() {
-        this.addCondition(// Mesh is connecting or connected
+        this.socket.addCondition(// Mesh is connecting or connected
         [
             signaling_1.MESH_TERMINATE,
             signaling_1.MESH_CONNECT_PEERS,
@@ -348,7 +349,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
             if (!this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
                 return "Message received for mesh that is not initialized.";
         });
-        this.addCondition([
+        this.socket.addCondition([
             signaling_1.MESH_SESSION_DESCRIPTION_CREATED,
             signaling_1.MESH_ICE_CANDIDATE_CREATED
         ], (packet) => {
@@ -430,6 +431,15 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     }
     sendServer(message, data) {
         this.socket.send(message, data);
+    }
+    onServerMessage(message, callback) {
+        this.socket.onMessage(message, callback);
+    }
+    addServerMessage(message) {
+        this.socket.addMessage(message);
+    }
+    addServerMessages(messages) {
+        this.socket.addMessages(messages);
     }
 }
 exports.default = LocalMeshClient;
