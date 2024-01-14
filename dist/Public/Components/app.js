@@ -9,6 +9,7 @@ const react_1 = __importDefault(require("react"));
 const connecting_1 = __importDefault(require("./Tabs/connecting"));
 const landing_1 = __importDefault(require("./Tabs/landing"));
 const lobby_1 = __importDefault(require("./Tabs/lobby"));
+const game_1 = __importDefault(require("./Tabs/game"));
 const game_client_1 = __importDefault(require("../game_client"));
 //import { GAME_CREATE_RESPONSE } from "../../MessageLists/game_signaling";
 //const urlParams = new URLSearchParams(window.location.search);
@@ -70,6 +71,9 @@ function App() {
     react_1.default.useEffect(() => client.gameJoined.subscribe(() => {
         setTab(react_1.default.createElement(lobby_1.default, { client: client }));
         //setTab(<Game client={client} />);
+    }));
+    react_1.default.useEffect(() => client.gameStarted.subscribe(() => {
+        setTab(react_1.default.createElement(game_1.default, { client: client }));
     }));
     react_1.default.useEffect(() => client.gameLeft.subscribe(() => {
         setTab(react_1.default.createElement(landing_1.default, { client: client }));

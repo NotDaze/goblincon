@@ -16,13 +16,17 @@ const colors = [
     "#000000",
 ];
 class DrawPad extends react_1.default.Component {
-    /*constructor(props: {}) {
-        
-        super(props);
-        
-    }*/
     canvas;
     drawing = false;
+    constructor() {
+        super({});
+        /*client.drawingEnded.connect(() => {
+            
+            if (this.canvas !== undefined)
+                client.sendDrawingData(this.canvas.ctx.getImageData(0, 0, this.canvas.sourceWidth, this.canvas.sourceHeight));
+            
+        });*/
+    }
     Color(props) {
         const onClick = () => {
             this.canvas?.setStrokeStyle(props.color);
@@ -57,6 +61,7 @@ class DrawPad extends react_1.default.Component {
             return;
         this.drawing = false;
         this.canvasDraw(ev);
+        console.log(this.canvas?.element.toDataURL("image/jpeg"));
     }
     canvasDraw(ev) {
         if (!this.drawing)
@@ -99,3 +104,7 @@ class DrawPad extends react_1.default.Component {
     }
 }
 exports.default = DrawPad;
+/*
+export default function DrawPad({ client }: { client: LocalGameClient }) {
+    
+}*/
