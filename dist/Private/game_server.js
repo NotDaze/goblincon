@@ -71,6 +71,9 @@ class GameSocket extends signaling_server_1.SignalingSocket {
     setName(name) {
         this.name = name;
     }
+    isHost() {
+        return this.meshID === 0;
+    }
 }
 exports.GameSocket = GameSocket;
 class GameServer extends signaling_server_1.default {
@@ -160,6 +163,13 @@ class GameServer extends signaling_server_1.default {
                 mesh.add(packet.peer);
             }
             //this.send(packet.peer, GAME_JOIN_RESPONSE);
+        });
+        this.onMessage(game_signaling_1.GAME_START, packet => {
+            let mesh = this.getPeerMesh(packet.peer);
+            if (mesh !== undefined && packet.peer.isHost() && !mesh.isActive()) {
+                mesh.attemptInitialize();
+                mesh.sendAll(game_signaling_1.GAME_START);
+            }
         });
     }
     lobbyJoin(mesh, peer, name) {

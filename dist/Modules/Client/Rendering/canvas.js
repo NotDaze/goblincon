@@ -46,6 +46,17 @@ class Canvas {
     static fromElement(canvasElement) {
         return new Canvas(this.getCanvasElementContext(canvasElement));
     }
+    static fromImageData(imageData) {
+        let canvas = Canvas.create(imageData.width, imageData.height);
+        canvas.ctx.putImageData(imageData, 0, 0);
+        return canvas;
+    }
+    static create(sourceWidth, sourceHeight) {
+        let canvasElement = document.createElement("canvas");
+        canvasElement.width = sourceWidth;
+        canvasElement.height = sourceHeight;
+        return Canvas.fromElement(canvasElement);
+    }
     constructor(ctx) {
         this.ctx = ctx;
     }

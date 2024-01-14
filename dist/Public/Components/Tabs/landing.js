@@ -20,7 +20,7 @@ function Landing({ client }) {
         }
     };
     const setCode = (newCode) => code = newCode;
-    return (react_1.default.createElement("div", { id: "landing" },
+    return (react_1.default.createElement("div", { id: "landing", className: "tab" },
         react_1.default.createElement("input", { id: "name-input", defaultValue: name, onChange: ev => setName(ev.target.value), placeholder: "Name" }),
         react_1.default.createElement("input", { id: "code-input", defaultValue: code, onChange: ev => setCode(ev.target.value), placeholder: "Code" }),
         react_1.default.createElement("button", { id: "join-btn", onClick: ev => client.joinGame(name, code) }, "Join"),

@@ -31,7 +31,7 @@ export default function Landing({ client }: { client: LocalGameClient }) {
 	const setCode = (newCode: string) => code = newCode;
 	
 	return (
-		<div id="landing">
+		<div id="landing" className="tab">
 			<input id="name-input" defaultValue={name} onChange={ev => setName(ev.target.value)} placeholder="Name"></input>
 			<input id="code-input" defaultValue={code} onChange={ev => setCode(ev.target.value)} placeholder="Code"></input>
 			<button id="join-btn" onClick={ev => client.joinGame(name, code)}>Join</button>

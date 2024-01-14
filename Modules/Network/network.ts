@@ -699,6 +699,9 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 	public getPeers(): Set<RemotePeerType> {
 		return this.peers;
 	}
+	public getPeerCount(): number {
+		return this.peers.size;
+	}
 	
 	
 	public addPeer(peer: RemotePeerType, id: number = this.peerIndex.getNextID()): void {

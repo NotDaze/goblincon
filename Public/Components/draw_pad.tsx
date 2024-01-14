@@ -2,6 +2,7 @@
 
 import React from "react";
 import Canvas from "../../Modules/Client/Rendering/canvas";
+import LocalGameClient from "../game_client";
 
 const colors = [
 	"#FF0000",
@@ -17,15 +18,23 @@ const colors = [
 export default class DrawPad extends React.Component {
 	
 	
-	/*constructor(props: {}) {
-		
-		super(props);
-		
-	}*/
-	
 	private canvas?: Canvas;
-	
 	private drawing = false;
+	
+	constructor() {
+		
+		super({});
+		
+		/*client.drawingEnded.connect(() => {
+			
+			if (this.canvas !== undefined)
+				client.sendDrawingData(this.canvas.ctx.getImageData(0, 0, this.canvas.sourceWidth, this.canvas.sourceHeight));
+			
+		});*/
+		
+	}
+	
+	
 	
 	private Color(props: { color: string }) {
 		
@@ -90,6 +99,8 @@ export default class DrawPad extends React.Component {
 		
 		this.drawing = false;
 		this.canvasDraw(ev);
+		
+		console.log(this.canvas?.element.toDataURL("image/jpeg"));
 		
 	}
 	private canvasDraw(ev: React.MouseEvent): void {
@@ -173,3 +184,9 @@ export default class DrawPad extends React.Component {
 	}
 	
 }
+/*
+export default function DrawPad({ client }: { client: LocalGameClient }) {
+	
+}*/
+
+

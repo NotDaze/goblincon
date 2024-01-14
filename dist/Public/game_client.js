@@ -46,6 +46,8 @@ const mesh_client_1 = __importStar(require("../Modules/Network/mesh_client"));
 //import Arg from "../Modules/Network/arg"
 const state_1 = __importDefault(require("../Modules/Core/state"));
 const game_signaling_1 = __importStar(require("../MessageLists/game_signaling"));
+const game_1 = __importStar(require("../MessageLists/game"));
+const canvas_1 = __importDefault(require("../Modules/Client/Rendering/canvas"));
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
 // Host creates game (via server)
 // Server generates a room ID thing
@@ -54,7 +56,9 @@ const game_signaling_1 = __importStar(require("../MessageLists/game_signaling"))
 // 
 class RemoteGameClient extends mesh_client_1.RemoteMeshClient {
     //public name: string;
+    drawingFinished = new signal_1.default();
     name = "";
+    drawings = new Map();
     constructor() {
         super();
     }
@@ -81,13 +85,22 @@ class LocalGameClient extends mesh_client_1.default {
     gameState = new state_1.default(GameState.IDLE);
     gameJoined = this.gameState.transitionTo(GameState.LOBBY);
     gameLeft = this.gameState.transitionTo(GameState.IDLE);
-    lobbyPlayerListUpdate = new signal_1.default();
+    gameStarted = this.gameState.transitionTo(GameState.ACTIVE);
+    drawingStarted = new signal_1.default();
+    drawingEnded = new signal_1.default();
+    votingStarted = new signal_1.default();
+    votingEnded = new signal_1.default();
+    //gameDrawingStarted = new Signal<string>();
+    //gameVotingStarted = new Signal<void>();
     name = "";
     code = "";
+    roundNumber = 1;
+    drawings = new Map();
     //private lobbyNames = new SortedArray();
     constructor(serverUrl, protocols = []) {
         super(RemoteGameClient, serverUrl, protocols);
         this.addServerMessages(game_signaling_1.default);
+        this.addMessages(game_1.default);
         this.onServerMessage(game_signaling_1.GAME_JOINED, packet => {
             if (packet.data === undefined) {
                 console.log("Game join failed...");
@@ -98,12 +111,25 @@ class LocalGameClient extends mesh_client_1.default {
                 this.handleJoined(packet.data.id, packet.data.name, packet.data.code);
             }
         });
+        this.onServerMessage(game_signaling_1.GAME_START, packet => {
+            //if (!this.gameState.is());
+            this.gameState.set(GameState.ACTIVE);
+        });
+        this.addServerCondition([
+            game_signaling_1.GAME_LOBBY_PLAYERS_JOINED,
+            game_signaling_1.GAME_LOBBY_PLAYERS_LEFT
+        ], packet => {
+            if (!this.gameState.is(GameState.LOBBY))
+                return "Received lobby join/leave message while not in lobby.";
+        });
         this.onServerMessage(game_signaling_1.GAME_LOBBY_PLAYERS_JOINED, packet => {
             for (const playerData of packet.data) {
                 let player = this.getOrCreatePeer(playerData.id);
-                player?.setName(playerData.name);
+                if (player !== undefined) {
+                    player.setName(playerData.name);
+                    console.log(`Lobby Join: ${playerData.id}: ${playerData.name}`);
+                }
             }
-            this.lobbyPlayerListUpdate.emit();
         });
         this.onServerMessage(game_signaling_1.GAME_LOBBY_PLAYERS_LEFT, packet => {
             for (const playerData of packet.data) {
@@ -111,7 +137,6 @@ class LocalGameClient extends mesh_client_1.default {
                 if (player)
                     this.dropPeer(player);
             }
-            this.lobbyPlayerListUpdate.emit();
         });
         //this.meshLeft.connect();
     }
@@ -146,11 +171,28 @@ class LocalGameClient extends mesh_client_1.default {
     joinGame(name, code) {
         this.sendServer(game_signaling_1.GAME_JOIN, { name, code: code.toUpperCase() });
     }
-    getPeerNames() {
-        let peerNames = new Array();
-        for (const peer of this.peers)
-            peerNames.push(peer.getName());
-        return peerNames;
+    canStartGame() {
+        return this.isHost(); // && this.getPeerCount() >= 2;
+    }
+    startGame() {
+        if (this.canStartGame())
+            this.sendServer(game_signaling_1.GAME_START);
+    }
+    sendDrawingData(imageData) {
+        this.drawings.set(this.roundNumber, canvas_1.default.fromImageData(imageData));
+        const MAX_CHUNK_SIZE = 16000;
+        let data = imageData.data;
+        let next = 0;
+        while (next < data.length) {
+            let chunk_size = Math.min(data.length - next, MAX_CHUNK_SIZE);
+            this.sendAll(game_1.DRAWING_DATA_CHUNK, {
+                round: this.roundNumber,
+                index: next,
+                // This hurts my soul, but I think it's fine
+                data: new Uint8Array(data.slice(next, next + chunk_size))
+            });
+            next += chunk_size;
+        }
     }
 }
 exports.default = LocalGameClient;

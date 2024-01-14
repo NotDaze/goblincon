@@ -87,6 +87,10 @@ export default function App() {
 		//setTab(<Game client={client} />);
 	}));
 	
+	React.useEffect(() => client.gameStarted.subscribe(() => {
+		setTab(<Game client={client} />)
+	}));
+	
 	React.useEffect(() => client.gameLeft.subscribe(() => {
 		setTab(<Landing client={client} />);
 	}));
