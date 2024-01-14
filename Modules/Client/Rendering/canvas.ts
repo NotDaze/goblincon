@@ -57,8 +57,24 @@ export default class Canvas {
 			return ctx;
 		
 	}
-	protected static fromElement(canvasElement: HTMLCanvasElement): Canvas {
+	static fromElement(canvasElement: HTMLCanvasElement): Canvas {
 		return new Canvas(this.getCanvasElementContext(canvasElement));
+	}
+	static fromImageData(imageData: ImageData): Canvas {
+		
+		let canvas = Canvas.create(imageData.width, imageData.height);
+		canvas.ctx.putImageData(imageData, 0, 0);
+		return canvas;
+		
+	}
+	static create(sourceWidth: number, sourceHeight: number): Canvas {
+		
+		let canvasElement: HTMLCanvasElement = document.createElement("canvas");
+		canvasElement.width = sourceWidth;
+		canvasElement.height = sourceHeight;
+		
+		return Canvas.fromElement(canvasElement);
+		
 	}
 	
 	constructor(ctx: CanvasRenderingContext2D) {

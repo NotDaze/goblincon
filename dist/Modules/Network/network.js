@@ -529,6 +529,9 @@ class LocalMultiPeer extends LocalPeer {
     getPeers() {
         return this.peers;
     }
+    getPeerCount() {
+        return this.peers.size;
+    }
     addPeer(peer, id = this.peerIndex.getNextID()) {
         let listener = new signal_1.SignalListener();
         this.peerListeners.set(peer, listener);

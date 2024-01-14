@@ -80,15 +80,8 @@ export default function App() {
       setTab(<Landing client={client} />);
     });
   }, []);
-
-  // TODO: Find out why this hook has a return
-  React.useEffect(() => {
-    return client.connected.subscribe(() => {
-      //setTab(<Game />);
-      //setTab(<Lobby />);
-    });
-  });
-
+  
   //<DrawPad />
   return <div id="app">{tab}</div>;
+
 }

@@ -6,7 +6,7 @@ import LocalGameClient from "../../game_client";
 export default function Connecting({ client }: { client?: LocalGameClient }) {
 	
 	return (
-		<div>
+		<div id="connecting" className="tab">
 			Connecting...
 		</div>
 	);

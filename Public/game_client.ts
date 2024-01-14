@@ -23,10 +23,18 @@ import GameSignalingMessages, {
 	GAME_CREATE,
 	GAME_JOIN,
 	GAME_JOINED,
+	
 	GAME_LOBBY_PLAYERS_JOINED,
-	GAME_LOBBY_PLAYERS_LEFT
+	GAME_LOBBY_PLAYERS_LEFT,
+	
+	GAME_START
 } from "../MessageLists/game_signaling"
+import GameMessages, {
+	DRAWING_DATA_CHUNK
+} from "../MessageLists/game"
+
 import SortedArray from "../Modules/Core/sorted_array";
+import Canvas from "../Modules/Client/Rendering/canvas"
 
 
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
@@ -41,7 +49,10 @@ export class RemoteGameClient extends RemoteMeshClient {
 	
 	//public name: string;
 	
+	drawingFinished = new Signal<void>();
+	
 	private name = "";
+	private drawings = new Map<number, Canvas>();
 	
 	constructor() {
 		
@@ -77,11 +88,23 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	
 	gameJoined = this.gameState.transitionTo(GameState.LOBBY);
 	gameLeft = this.gameState.transitionTo(GameState.IDLE);
+	gameStarted = this.gameState.transitionTo(GameState.ACTIVE);
 	
-	lobbyPlayerListUpdate = new Signal<void>();
+	drawingStarted = new Signal<string>();
+	drawingEnded = new Signal<void>();
+	votingStarted = new Signal<void>();
+	votingEnded = new Signal<void>();
 	
-	private name: string = "";
-	private code: string = "";
+	//gameDrawingStarted = new Signal<string>();
+	//gameVotingStarted = new Signal<void>();
+	
+	
+	private name = "";
+	private code = "";
+	
+	private roundNumber = 1;
+	
+	private drawings = new Map<number, Canvas>();
 	
 	//private lobbyNames = new SortedArray();
 	
@@ -89,6 +112,7 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 		super(RemoteGameClient, serverUrl, protocols);
 		this.addServerMessages(GameSignalingMessages);
+		this.addMessages(GameMessages);
 		
 		this.onServerMessage(GAME_JOINED, packet => {
 			
@@ -103,16 +127,37 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 			
 		});
 		
+		this.onServerMessage(GAME_START, packet => {
+			//if (!this.gameState.is());
+			this.gameState.set(GameState.ACTIVE);
+		});
+		
+		
+		
+		
+		
+		this.addServerCondition([
+			GAME_LOBBY_PLAYERS_JOINED,
+			GAME_LOBBY_PLAYERS_LEFT
+		], packet => {
+			
+			if (!this.gameState.is(GameState.LOBBY))
+				return "Received lobby join/leave message while not in lobby.";
+			
+		});
+		
 		this.onServerMessage(GAME_LOBBY_PLAYERS_JOINED, packet => {
 			
 			for (const playerData of packet.data) {
 				
 				let player = this.getOrCreatePeer(playerData.id);
-				player?.setName(playerData.name);
+				
+				if (player !== undefined) {
+					player.setName(playerData.name);
+					console.log(`Lobby Join: ${playerData.id}: ${playerData.name}`);
+				}
 				
 			}
-			
-			this.lobbyPlayerListUpdate.emit();
 			
 		});
 		this.onServerMessage(GAME_LOBBY_PLAYERS_LEFT, packet => {
@@ -126,12 +171,14 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 				
 			}
 			
-			this.lobbyPlayerListUpdate.emit();
-			
 		});
 		
 		//this.meshLeft.connect();
-		
+		this.onMessage(DRAWING_DATA_CHUNK, packet => {
+			
+			
+			
+		});
 		
 	}
 	
@@ -176,7 +223,55 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		this.sendServer(GAME_JOIN, { name, code: code.toUpperCase() });
 	}
 	
-	getPeerNames(): Array<string> {
+	canStartGame(): boolean {
+		return this.isHost()// && this.getPeerCount() >= 2;
+	}
+	startGame(): void {
+		
+		if (this.canStartGame())
+			this.sendServer(GAME_START);
+		
+	}
+	
+	sendDrawingData(encoded: string): void {
+		
+		//this.drawings.set(this.roundNumber, Canvas.fromImageData(imageData));
+		
+		const MAX_CHUNK_SIZE = 16000;
+		let next = 0;
+		
+		while (next < encoded.length) {
+			
+			let chunk_size = Math.min(encoded.length - next, MAX_CHUNK_SIZE);
+			
+			this.sendAll(DRAWING_DATA_CHUNK, {
+				round: this.roundNumber,
+				data: encoded.substring(next, next += chunk_size)
+			});
+			
+		}
+		
+		/*let data = imageData.data;
+		let next = 0;
+		
+		while (next < data.length) {
+			
+			let chunk_size = Math.min(data.length - next, MAX_CHUNK_SIZE);
+			
+			this.sendAll(DRAWING_DATA_CHUNK, {
+				round: this.roundNumber,
+				index: next,
+				// This hurts my soul, but I think it's fine
+				data: new Uint8Array(data.slice(next, next + chunk_size))
+			});
+			
+			next += chunk_size;
+			
+		}*/
+		
+	}
+	
+	/*getPeerNames(): Array<string> {
 		
 		let peerNames = new Array<string>();
 		
@@ -184,8 +279,8 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 			peerNames.push(peer.getName());
 		
 		return peerNames;
-	
-	}
+		
+	}*/
 	
 }
 

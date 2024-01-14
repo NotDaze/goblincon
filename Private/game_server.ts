@@ -81,6 +81,10 @@ export class GameSocket extends SignalingSocket {
 		this.name = name;
 	}
 	
+	isHost(): boolean {
+		return this.meshID === 0;
+	}
+	
 }
 
 export default class GameServer extends SignalingServer<GameSocket> {
@@ -211,6 +215,17 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			}
 			
 			//this.send(packet.peer, GAME_JOIN_RESPONSE);
+			
+		});
+		
+		this.onMessage(GAME_START, packet => {
+			
+			let mesh = this.getPeerMesh(packet.peer);
+			
+			if (mesh !== undefined && packet.peer.isHost() && !mesh.isActive()) {
+				mesh.attemptInitialize();
+				mesh.sendAll(GAME_START);
+			}
 			
 		});
 		
