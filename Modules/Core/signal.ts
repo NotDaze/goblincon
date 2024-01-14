@@ -3,6 +3,7 @@ import EventEmitter from "events";
 import PrioritySet from "./priority_set";
 //const PrioritySet = require("./priority_set");
 
+//import State from "./state";
 
 export interface SignalLike<ArgType> {
 	
@@ -89,6 +90,15 @@ export default class Signal<ArgType> extends Set<(arg: ArgType) => any> implemen
 		newSignal.bindSignal(signal);
 		return newSignal;
 	}
+	/*static fromStateTransition<T>(state: State<T>, from: T, to: T) {
+		
+	}
+	static fromStateTransitionTo<T>(state: State<T>, ...states: Array<T>): Signal {
+		
+	}
+	static fromStateTransitionFrom<T>(state: State<T>, ...states: Array<T>): Signal {
+		
+	}*/
 	
 	
 	
@@ -113,6 +123,21 @@ export default class Signal<ArgType> extends Set<(arg: ArgType) => any> implemen
 	}
 	public disconnectAll(): void {
 		this.clear();
+	}
+	
+	public subscribe(callback: (arg: ArgType) => void, chain?: () => void): () => void {
+		
+		this.connect(callback);
+		
+		return () => {
+			
+			if (chain !== undefined)
+				chain();
+			
+			this.disconnect(callback);
+			
+		}
+		
 	}
 	
 	public emit(arg: ArgType): void {

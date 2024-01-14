@@ -4,58 +4,22 @@
 	box-sizing: border-box;
 }
 
-.flex {
-	display: flex;
-}
-.inline-flex {
-	display: inline-flex;
-}
-
-
-
-.color-button {
-	
-	aspect-ratio: 1;
-	
-	flex-shrink: 1;
-	flex: 1;
-	
-	border: none;
+body {
 	
 }
 
 #app {
+	display: flex;
 	justify-content: center;
 }
-
-#drawpad {
+.tab {
 	
-	width: 80vmin;
-	
-	flex-direction: column;
-	align-items: stretch;
-	
-	gap: 5px;
-	
-	padding: 5px;
-	border-radius: 5px;
-	background-color: #999;
-	border: 2px solid #333;
-	
-}
-/* #drawpad-color-container {
-	
-} */
-
-#drawpad-canvas {
+	display: flex;
+	justify-content: center;
 	
 	width: 100%;
-	height: auto;
-	
-	aspect-ratio: 1;
-	
-	background-color: white;
+	height: 100%;
+	margin: none;
 	
 }
-
 

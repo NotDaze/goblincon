@@ -65,6 +65,7 @@ export const MESH_CLIENT_STATUS_UPDATE = new Message([
 );*/
 
 const MESSAGES: Array<Message<any>> = [
+	//MESH_JOIN,
 	MESH_INITIALIZE,
 	MESH_TERMINATE,
 	MESH_CONNECT_PEERS,

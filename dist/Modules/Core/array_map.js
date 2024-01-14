@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ArrayMap = void 0;
+// Maybe make this extend map
 class ArrayMap {
     map = new Map();
     *entries() {

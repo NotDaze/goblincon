@@ -52,9 +52,10 @@ export type ArgLike<T> = Arg<T> | ArgMap<T>;
 
 class ArgLength {
 	
-	public iterations: number;
-	public bytes: number;
+	public readonly iterations: number;
+	public readonly bytes: number;
 	
+	static ZERO = new ArgLength(0, 0);
 	static VAR1 = new ArgLength(1, 1);
 	static VAR2 = new ArgLength(1, 2);
 	static VAR3 = new ArgLength(1, 3);
@@ -426,18 +427,18 @@ export default class Arg<T> {
 	static choice<T>(...choices: Array<T>): ChoiceArg<T> {
 		return new ChoiceArg<T>(...choices);
 	}
-	static array<T>(arg: Arg<T>, byteCount : number = 2): ArrayArg<T> {
-		return new ArrayArg(arg, byteCount);
+	static array<T>(arg: ArgLike<T>): ArrayArg<T> {
+		return Arg.arrayLong<T>(arg);
 	}
-	static arrayShort<T>(arg: Arg<T>) {
-		return Arg.array(arg, 1);
+	static arrayShort<T>(arg: ArgLike<T>): ArrayArg<T> {
+		return new ArrayArg<T>(arg, ArgLength.VAR1);
 	}
-	static arrayLong<T>(arg: Arg<T>) {
-		return Arg.array(arg, 2);
+	static arrayLong<T>(arg: ArgLike<T>): ArrayArg<T> {
+		return new ArrayArg<T>(arg, ArgLength.VAR2);
 	}
 	
 	
-	static branch<T>(...paths : Array<ArgLike<any>>): BranchArg<T> {
+	static branch<T>(...paths : Array<ArgLike<T>>): BranchArg<T> {
 		return new BranchArg(paths);
 	}
 	static const<T>(value: T): ConstArg<T> {
@@ -446,11 +447,11 @@ export default class Arg<T> {
 	static auto<T>(value: T): ConstArg<T> {
 		return new ConstArg(value, false);
 	}
-	static default<T>(arg: Arg<T>, fallback: T): BranchArg<T> {
+	static default<T, FallbackT>(arg: ArgLike<T>, fallback: FallbackT): BranchArg<T | FallbackT> {
 		return new BranchArg([ new ConstArg(fallback, false), arg ]);
 	}
-	static optional<T>(arg: Arg<T>): BranchArg<T | undefined> {
-		return Arg.default<T | undefined>(arg, undefined);
+	static optional<T>(arg: ArgLike<T>): BranchArg<T | undefined> {
+		return Arg.default(arg, undefined);
 	}
 	
 	/*static UINT1 = this.int(1, 0);
@@ -505,7 +506,6 @@ class RawArg extends Arg<Uint8Array> {
 		super(length);
 	}
 	
-	
 	public matches(value: any): boolean { // Maybe wants a length check
 		return value instanceof Uint8Array;
 	}
@@ -529,7 +529,7 @@ class ChoiceArg<T> extends Arg<T> {
 	private choices: Array<T>;
 	
 	constructor(...choices: Array<T>) {
-		super(new ArgLength(0, Arg.calculateByteCount(choices.length)));
+		super(ArgLength.fixed(Arg.calculateByteCount(choices.length)));
 		this.choices = choices;
 	}
 	
@@ -557,7 +557,7 @@ class IntArg extends Arg<number> {
 	
 	constructor(byteCount: number, min = 0) {
 		
-		super(new ArgLength(0, byteCount));
+		super(ArgLength.fixed(byteCount));
 		
 		this.min = min;
 		this.max = min + Arg.calculateChoiceCount(byteCount);
@@ -589,7 +589,7 @@ class FloatArg extends Arg<number> {
 	constructor(min: number, max: number, precision: number) {
 		
 		if (precision === undefined) precision = 0.01;
-		super(new ArgLength(0, Arg.calculateByteCount((max - min)/precision)));
+		super(ArgLength.fixed(Arg.calculateByteCount((max - min)/precision)));
 		
 		this.min = (min === undefined ? 0 : min);
 		this.max = this.min + precision * Arg.calculateChoiceCount(this.length.bytes);
@@ -642,11 +642,11 @@ class ArrayArg<T> extends Arg<Array<T>> {
 	
 	private arg: any;
 	
-	constructor(arg : any, byteCount : number = 2) {
+	constructor(arg: any, length = ArgLength.VAR2) {
 		
 		// special length header that tells how many copies of the sublist you get
 		// also, this is certified black magic
-		super(new ArgLength(1, byteCount));
+		super(length);
 		this.arg = arg;
 		
 	}
@@ -699,9 +699,13 @@ class DictArg<Key extends keyof any, Value> extends Arg<Record<Key, Value>> {
 	private keyArg: Arg<Key>;
 	private valueArg: Arg<Value>;
 	
-	constructor(keyArg: Arg<Key>, valueArg: Arg<Value>, byteCount = 2) {
+	//fixed() {
+	//	
+	//}
+	
+	constructor(keyArg: Arg<Key>, valueArg: Arg<Value>, length = ArgLength.VAR2) {
 		
-		super(new ArgLength(1, byteCount));
+		super(length);
 		
 		this.keyArg = keyArg;
 		this.valueArg = valueArg;
@@ -771,22 +775,21 @@ class BranchArg<T> extends Arg<T> {
 	
 	private paths : Array<any>;
 	
-	constructor(paths : Iterable<any>, byteCount: number = 1) {
-		super(new ArgLength(1, byteCount));
+	constructor(paths : Iterable<any>, length = ArgLength.VAR1) {
+		super(length);
 		this.paths = Array.from(paths);
 	}
 	
 	public matches(value: any): boolean {
 		
-		for (const path of this.paths) {
+		for (const path of this.paths)
 			if (Arg.matches(path, value))
 				return true;
-		}
 		
 		return false;
 		
 	}
-	public streamEncode(value : any, stream : ByteOStream): void {
+	public streamEncode(value : T, stream : ByteOStream): void {
 		
 		for (let i = 0; i < this.paths.length; i++) {
 			//console.log(i)
@@ -802,7 +805,7 @@ class BranchArg<T> extends Arg<T> {
 		console.error("No match found for BranchArg.");
 		
 	}
-	public streamDecode(stream : ByteIStream): any {
+	public streamDecode(stream : ByteIStream): T {
 		
 		let path = Arg.resolveHeader(stream, this.length);
 		
@@ -821,7 +824,7 @@ class ConstArg<T> extends Arg<T> {
 	
 	constructor(value: T, mandatory = true) {
 		
-		super(new ArgLength(0, 0));
+		super(ArgLength.ZERO);
 		
 		this.value = value;
 		this.mandatory = mandatory;
@@ -832,7 +835,7 @@ class ConstArg<T> extends Arg<T> {
 		
 		if (value === this.value)
 			return true;
-		else if (value == null)
+		else if (value == undefined)
 			return !this.mandatory;
 		else
 			return false;
@@ -879,7 +882,7 @@ Arg.STR3 = new StrArg(ArgLength.VAR3);
 
 Arg.BOOL = Arg.choice<boolean>(false, true);
 
-Arg.NONE = Arg.const(undefined);
+Arg.NONE = Arg.auto(undefined);
 
 
 /*let arg = {

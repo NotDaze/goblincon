@@ -63,11 +63,15 @@ export class RemoteMeshClient extends RemotePeer {
 	private connection = new RTCPeerConnection({
 		iceServers: [
 			{
-				urls: [ "stun:stun.l.google.com:19302" ]
+				urls: [ "stun:stun.l.google.com", "stun:stun1.l.google.com" ]
 			}
 		]
 	});
-	private channels = new Map<TransferMode, RTCDataChannel>; // Overkill
+	private channels = new Map<TransferMode, RTCDataChannel>(); // Overkill
+	
+	/*private channels = {
+		TransferMode.RELIABLE:
+	};*/
 	//private channelReliable = );
 	//private channelUnreliable = );
 	//private a = this.rtcConnection.createDataChannel()
@@ -213,10 +217,9 @@ export class RemoteMeshClient extends RemotePeer {
 			return;
 		
 		// All channels must be open
-		for (const channel of this.channels.values()) {
+		for (const channel of this.channels.values())
 			if (channel.readyState !== "open")
 				return;
-		}
 		
 		// We're fully connected
 		this.state.set(ConnectionState.CONNECTED);
@@ -346,8 +349,6 @@ export class RemoteMeshClient extends RemotePeer {
 	
 }
 
-import ByteIStream from "../Core/byteistream";
-
 export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> extends LocalMultiPeer<RemoteClientType> {
 	
 	//statusUpdate = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
@@ -355,10 +356,24 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	//stabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>]>();
 	//destabilized = new Signal<[connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>]>();
 	
-	serverConnected: Signal<void>;
-	serverDisconnected: Signal<void>;
+	serverConnected: Signal<[ConnectionState, ConnectionState]>;
+	serverDisconnected: Signal<[ConnectionState, ConnectionState]>;
+	serverConnectionFailed: Signal<[ConnectionState, ConnectionState]>;
 	
-	serverConnectionFailed: Signal<void>;
+	meshInitialized = this.state.transition(
+		[ ConnectionState.NEW, ConnectionState.DISCONNECTED ],
+		[ ConnectionState.CONNECTING, ConnectionState.CONNECTED ]
+	);
+	meshTerminated = this.state.transition(
+		[ ConnectionState.CONNECTING, ConnectionState.CONNECTED ],
+		[ ConnectionState.NEW, ConnectionState.DISCONNECTED ]
+	);
+	
+	//meshJoined = new Signal<void>();
+	//meshLeft = new Signal<void>();
+	
+	
+	
 	
 	//serverConnecting: Signal<void>;
 	
@@ -394,8 +409,15 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			console.log("Connected to server");
 		});
 		
-		this.connected.connect(() => {
+		/*this.connected.connect(() => {
 			//this.sendServer(MESH_);
+		});*/
+		
+		this.meshInitialized.connect(() => {
+			
+			for (const peer of this.peers)
+				this.connectPeer(peer);
+			
 		});
 		
 		
@@ -420,11 +442,8 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				
 			});
 			
-			if (this.id > peer.id)
-				peer.createOffer();
-			
-			if (this.state.is(ConnectionState.CONNECTED)) // Late join, tell the server about it
-				this.sendStatus();
+			if (this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
+				this.connectPeer(peer);
 			
 		});
 		
@@ -441,7 +460,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			
 			//this.checkAndSendStatus();
 			//this.state.set(ConnectionState.DISCONNECTED);
-			this.close();
+			//this.close();
 			// TODO improve
 			
 		});
@@ -473,25 +492,23 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			
 		});
 		
+		// Dropped vs disconnected??
 		this.peerDisconnected.connect((peer: RemoteClientType) => {
 			
-			if (this.state.is(ConnectionState.CONNECTING)) {
+			/*if (this.state.is(ConnectionState.CONNECTING)) {
 				//console.error("Connection failed.");
 				this.close();
-			}
+			}*/
 			
 		});
-		
-		
 		
 		this.closed.connect(() => {
 			
 			this.state.set(ConnectionState.DISCONNECTED);
 			
+			// Come back to this
 			for (const peer of this.getPeers())
 				this.dropPeer(peer);
-			
-			
 			
 		});
 		
@@ -500,7 +517,6 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	}
 	
 	private initMessageHandling(): void {
-		
 		
 		
 		this.addServerCondition( // Mesh is connecting or connected
@@ -528,7 +544,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				
 				let peer = this.getPeer(packet.data.peerID);
 				
-				if (peer == undefined || !peer.state.is(ConnectionState.CONNECTING))
+				if (peer === undefined) // || !peer.state.any(ConnectionState.NEW, ConnectionState.CONNECTING))
 					return "Invalid SDP/ICE transport.";
 				
 			}
@@ -539,30 +555,33 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		this.onServerMessage(MESH_INITIALIZE, packet => {
 			
 			if (this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED)) {
-				console.error("Attempted to initialize mesh that is already initialized.");
+				console.error("Attempted to initialize mesh that is already connecting or connected.");
 				return;
 			}
 			
-			packet.data
-			
 			//console.log(packet.data.localID, packet.data.peerIDs);
-			
-			this.state.set(ConnectionState.CONNECTING);
 			
 			this.setID(packet.data.localID);
 			this.createPeers(packet.data.peerIDs);
+			
+			this.state.set(ConnectionState.CONNECTING);
+			
+			//this.meshInitialized.emit();
+			//this.meshJoined.emit();
 			
 		});
 		
 		
 		this.onServerMessage(MESH_TERMINATE, packet => {
 			
+			this.setID(-1);
 			this.close();
 			
 		});
 		
 		this.onServerMessage(MESH_CONNECT_PEERS, packet => {
 			
+			//console.log("Creating peers")
 			this.createPeers(packet.data.peerIDs);
 			
 		});
@@ -600,17 +619,40 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 	}
 	
-	private createPeers(ids: Array<number>): void {
+	protected createPeers(ids: Array<number>): void {
 		
-		for (const id of ids) {
-			
-			if (id !== this.id && !this.ids.has(id)) // Error message?
-				this.addPeer(new this.clientClass(), id);
-			
-		}
+		for (const id of ids)
+			//if (id !== this.id && !this.ids.has(id)) // Error message?
+			this.getOrCreatePeer(id);
 		
 	}
-	private dropPeers(ids: Array<number>): void {
+	protected createPeer(id: number): RemoteClientType | undefined {
+		
+		if (id === this.id)
+			return;
+		
+		let peer = new this.clientClass();
+		this.addPeer(peer, id);
+		return peer;
+		
+	}
+	protected getOrCreatePeer(id: number): RemoteClientType | undefined {
+		
+		let peer = this.getPeer(id);
+		return peer === undefined ? this.createPeer(id) : peer;
+		
+	}
+	protected connectPeer(peer: RemoteClientType): void {
+		
+		if (this.id > peer.id)
+			peer.createOffer();
+		
+		if (this.state.is(ConnectionState.CONNECTED)) // Late join, tell the server about it
+			this.sendStatus();
+		
+	}
+	
+	private dropPeers(ids: Iterable<number>): void {
 		
 		for (const id of ids) {
 			
@@ -620,7 +662,6 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 				this.dropPeer(peer);
 			
 		}
-		
 		
 	}
 	
@@ -646,15 +687,15 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 	}*/
 	private sendStatus(status: MultiPeerConnectionStatus<number> = this.getIDStatus()): void {
-		
 		this.sendServer(MESH_CLIENT_STATUS_UPDATE, status);
-		
 	}
 	
+	public isActive(): boolean {
+		return this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED);
+	}
 	public isStable(): boolean {
 		return this.stable;
 	}
-	
 	
 	public addServerMessage(message: Message<any>): void {
 		this.socket.addMessage(message);
@@ -668,12 +709,9 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	public addServerCondition<T>(messages: Iterable<Message<T>>, condition: (packet: Packet<void, T>) => string | void): void {
 		this.socket.addCondition(messages, condition);
 	}
-	
 	public sendServer<T>(message: Message<T>, data: T = undefined as T): void {
 		this.socket.send(message, data);
 	}
-	
-	
 	
 	
 }

@@ -24,9 +24,17 @@ import {
 import TwoWayMap from '../Modules/Core/two_way_map';
 import SignalingServer, { SignalingSocket, Mesh } from "../Modules/Network/signaling_server";
 import GameSignalingMessages, {
-	GAME_CREATE_REQUEST,
-	GAME_CREATE_RESPONSE,
-	GAME_JOIN_REQUEST
+	
+	GAME_CREATE,
+	GAME_JOIN,
+	GAME_JOINED,
+	
+	GAME_LOBBY_PLAYERS_JOINED,
+	GAME_LOBBY_PLAYERS_LEFT,
+	
+	GAME_START
+	
+	
 } from "../MessageLists/game_signaling";
 
 
@@ -64,7 +72,14 @@ import GameSignalingMessages, {
 
 export class GameSocket extends SignalingSocket {
 	
+	private name = "";
 	
+	getName(): string {
+		return this.name;
+	}
+	setName(name: string): void {
+		this.name = name;
+	}
 	
 }
 
@@ -73,7 +88,8 @@ export default class GameServer extends SignalingServer<GameSocket> {
 	//games = new TwoWayMap<String, Mesh<GameSocket>>();
 	
 	// Maybe could merge these or use a TwoWayMap
-	private games = new TwoWayMap<string, Mesh<GameSocket>>();
+	private games = new TwoWayMap<Mesh<GameSocket>, string>();
+	//private hosts = new Map<Mesh<GameSocket>, GameSocket>();
 	
 	
 	constructor(wssArgs = GameServer.WSS_ARGS) {
@@ -93,40 +109,104 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			this.games.set(code, mesh);
 			this.send(creator, GAME_CREATE_RESPONSE, code);*/
 			
+			/*mesh.peersAdded.connect(peers => {
+				
+				
+			});*/
+			
+			mesh.peersAdded.connect(peers => {
+				
+				for (const peer of peers)
+					this.send(peer, GAME_JOINED, { id: peer.getMeshID(), name: peer.getName(), code: this.games.get(mesh) });
+				
+				// Tell new peer about existing ones, and tell existing peers about the new one
+				let joinData = new Array<{ id: number, name: string }>();
+				let existingPeerData = new Array<{ id: number, name: string }>();
+				
+				for (const peer of peers)
+					joinData.push({ id: peer.getMeshID(), name: peer.getName() });
+				
+				for (const peer of mesh.getPeers()) {
+					
+					existingPeerData.push({ id: peer.getMeshID(), name: peer.getName() });
+					
+					if (!peers.includes(peer))
+						this.send(peer, GAME_LOBBY_PLAYERS_JOINED, joinData);
+					
+				}
+				
+				this.send(peers, GAME_LOBBY_PLAYERS_JOINED, existingPeerData);
+				
+			});
+			
+			mesh.peersLeaving.connect(peers => {
+				
+				if (mesh.state.is(ConnectionState.NEW)) {
+					
+					let leaveData = new Array<{id: number}>();
+					
+					for (const peer of peers)
+						leaveData.push({ id: peer.getMeshID() });
+					for (const peer of mesh.getPeers())
+						this.send(peer, GAME_LOBBY_PLAYERS_LEFT, leaveData);
+					
+				}
+				
+			});
+			
 		});
 		
 		this.meshDestroyed.connect((mesh: Mesh<GameSocket>) => {
-			this.games.reverseDelete(mesh);
+			this.games.delete(mesh);
+		});
+		
+		/*this.peerAdded.connect(peer => {
+			
+		});
+		this.peerDisconnected.connect(peer => {
+			
+		});
+		this.peerDropped.connect(peer => {
+			
+		});*/
+		
+		this.addCondition([
+			GAME_CREATE,
+			GAME_JOIN
+		], packet => {
+			
+			if (this.getPeerMesh(packet.peer) !== undefined)
+				return "Peer that is in a mesh attempted to create or join another.";
+			
 		});
 		
 		
-		this.onMessage(GAME_CREATE_REQUEST, packet => {
+		this.onMessage(GAME_CREATE, packet => {
 			
-			let mesh = this.createMesh(packet.peer);
+			let mesh = this.createMesh();
 			let code = this.generateGameCode();
 			
-			this.games.set(code, mesh);
+			this.games.set(mesh, code);
 			
-			this.send(packet.peer, GAME_CREATE_RESPONSE, code);
+			packet.peer.setName(packet.data.name);
+			mesh.add(packet.peer);
+			
+			//this.lobbyJoin(mesh, packet.peer, packet.data.name);
 			
 		});
 		
-		this.onMessage(GAME_JOIN_REQUEST, packet => {
-			
-			if (this.getPeerMesh(packet.peer) !== undefined) { // Already has mesh
-				return;
-			}
+		this.onMessage(GAME_JOIN, packet => {
 			
 			//let code = packet.data.code;
-			let mesh = this.games.get(packet.data);
-			
-			
+			let mesh = this.games.reverseGet(packet.data.code);
 			
 			if (mesh === undefined) {
 				// Handle invalid join code somehow
 				//this.send(packet.peer, GAME_JOIN_FAILED);
+				this.send(packet.peer, GAME_JOINED, undefined);
 			}
 			else {
+				packet.peer.setName(packet.data.name);
 				mesh.add(packet.peer);
 			}
 			
@@ -134,7 +214,24 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			
 		});
 		
+	}
+	
+	lobbyJoin(mesh: Mesh<GameSocket>, peer: GameSocket, name: string): void {
 		
+		//this.send(peer, GAME_JOINED, { id: peer.getMeshID(), name, code });
+		peer.setName(name);
+		mesh.add(peer);
+		
+	}
+	lobbyLeave(mesh: Mesh<GameSocket>, peer: GameSocket): void {
+		
+		mesh.remove(peer);
+		this.send(peer, GAME_JOINED, undefined);
+		
+		const leaveData = [ { id: peer.getMeshID() } ];
+		
+		for (const peer of mesh.getPeers())
+			this.send(peer, GAME_LOBBY_PLAYERS_LEFT, leaveData);
 		
 	}
 	
@@ -147,12 +244,24 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			code += chars[Math.floor(Math.random() * chars.length)];
 		
 		// Retry on collision. Dumb, but it works
-		if (this.games.has(code))
+		if (this.games.reverseHas(code))
 			return this.generateGameCode(length);
 		
 		return code;
 		
 	}
+	
+	getMeshHost(mesh: Mesh<GameSocket>): GameSocket {
+		
+		let host = mesh.getPeer(0);
+		
+		if (!host)
+			throw new Error("Invalid Mesh host.");
+		
+		return host;
+		
+	}
+	
 	/*meshFromCode(code: string): Mesh<GameSocket> | undefined {
 		return this.games.get(code);
 	}

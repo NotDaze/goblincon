@@ -31,6 +31,7 @@ const TEXT_DECODER = new TextDecoder();
 class ArgLength {
     iterations;
     bytes;
+    static ZERO = new ArgLength(0, 0);
     static VAR1 = new ArgLength(1, 1);
     static VAR2 = new ArgLength(1, 2);
     static VAR3 = new ArgLength(1, 3);
@@ -294,14 +295,14 @@ class Arg {
     static choice(...choices) {
         return new ChoiceArg(...choices);
     }
-    static array(arg, byteCount = 2) {
-        return new ArrayArg(arg, byteCount);
+    static array(arg) {
+        return Arg.arrayLong(arg);
     }
     static arrayShort(arg) {
-        return Arg.array(arg, 1);
+        return new ArrayArg(arg, ArgLength.VAR1);
     }
     static arrayLong(arg) {
-        return Arg.array(arg, 2);
+        return new ArrayArg(arg, ArgLength.VAR2);
     }
     static branch(...paths) {
         return new BranchArg(paths);
@@ -374,7 +375,7 @@ class RawArg extends Arg {
 class ChoiceArg extends Arg {
     choices;
     constructor(...choices) {
-        super(new ArgLength(0, Arg.calculateByteCount(choices.length)));
+        super(ArgLength.fixed(Arg.calculateByteCount(choices.length)));
         this.choices = choices;
     }
     matches(value) {
@@ -394,7 +395,7 @@ class IntArg extends Arg {
     min;
     max; // not inclusive
     constructor(byteCount, min = 0) {
-        super(new ArgLength(0, byteCount));
+        super(ArgLength.fixed(byteCount));
         this.min = min;
         this.max = min + Arg.calculateChoiceCount(byteCount);
     }
@@ -417,7 +418,7 @@ class FloatArg extends Arg {
     constructor(min, max, precision) {
         if (precision === undefined)
             precision = 0.01;
-        super(new ArgLength(0, Arg.calculateByteCount((max - min) / precision)));
+        super(ArgLength.fixed(Arg.calculateByteCount((max - min) / precision)));
         this.min = (min === undefined ? 0 : min);
         this.max = this.min + precision * Arg.calculateChoiceCount(this.length.bytes);
         this.precision = precision;
@@ -455,10 +456,10 @@ class StrArg extends Arg {
 }
 class ArrayArg extends Arg {
     arg;
-    constructor(arg, byteCount = 2) {
+    constructor(arg, length = ArgLength.VAR2) {
         // special length header that tells how many copies of the sublist you get
         // also, this is certified black magic
-        super(new ArgLength(1, byteCount));
+        super(length);
         this.arg = arg;
     }
     matches(values) {
@@ -495,8 +496,11 @@ class ArrayArg extends Arg {
 class DictArg extends Arg {
     keyArg;
     valueArg;
-    constructor(keyArg, valueArg, byteCount = 2) {
-        super(new ArgLength(1, byteCount));
+    //fixed() {
+    //	
+    //}
+    constructor(keyArg, valueArg, length = ArgLength.VAR2) {
+        super(length);
         this.keyArg = keyArg;
         this.valueArg = valueArg;
     }
@@ -539,15 +543,14 @@ class DictArg extends Arg {
 }
 class BranchArg extends Arg {
     paths;
-    constructor(paths, byteCount = 1) {
-        super(new ArgLength(1, byteCount));
+    constructor(paths, length = ArgLength.VAR1) {
+        super(length);
         this.paths = Array.from(paths);
     }
     matches(value) {
-        for (const path of this.paths) {
+        for (const path of this.paths)
             if (Arg.matches(path, value))
                 return true;
-        }
         return false;
     }
     streamEncode(value, stream) {
@@ -571,14 +574,14 @@ class ConstArg extends Arg {
     value;
     mandatory;
     constructor(value, mandatory = true) {
-        super(new ArgLength(0, 0));
+        super(ArgLength.ZERO);
         this.value = value;
         this.mandatory = mandatory;
     }
     matches(value) {
         if (value === this.value)
             return true;
-        else if (value == null)
+        else if (value == undefined)
             return !this.mandatory;
         else
             return false;
@@ -613,7 +616,7 @@ Arg.STR1 = new StrArg(ArgLength.VAR1);
 Arg.STR2 = new StrArg(ArgLength.VAR2);
 Arg.STR3 = new StrArg(ArgLength.VAR3);
 Arg.BOOL = Arg.choice(false, true);
-Arg.NONE = Arg.const(undefined);
+Arg.NONE = Arg.auto(undefined);
 /*let arg = {
     peerID: Arg.UINT2,
     //media: Arg.STRING1,

@@ -58,6 +58,7 @@ exports.MESH_CLIENT_STATUS_UPDATE = new network_1.Message([
     MESSAGE_ROOT.findMessage(new ByteIStream(new Uint8Array([1, 0])))
 );*/
 const MESSAGES = [
+    //MESH_JOIN,
     exports.MESH_INITIALIZE,
     exports.MESH_TERMINATE,
     exports.MESH_CONNECT_PEERS,

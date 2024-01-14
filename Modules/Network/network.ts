@@ -49,7 +49,7 @@ export class Packet<PeerType extends RemotePeer | void, DataType> {
 	
 }
 
-export class Message<T> {
+export class Message<T = undefined> {
 	
 	//static META_TIMESTAMP = symbol("META_TIMESTAMP");
 	
@@ -64,9 +64,7 @@ export class Message<T> {
 	private transferMode: TransferMode; // Not sure this is actually necessary, but eh
 	//private conditions = new Array<(packet: Packet) => boolean>;
 	
-	constructor(arg: ArgLike<T>, transferMode = TransferMode.RELIABLE) {
-		
-		//super();
+	constructor(arg: ArgLike<T> = Arg.NONE as ArgLike<T>, transferMode = TransferMode.RELIABLE) {
 		
 		this.arg = arg;
 		this.transferMode = transferMode;
@@ -196,15 +194,15 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		return this.addresses.get(message);
 	}*/
 	
-	hasMessageSignal(message: Message<any>): boolean {
+	hasMessageSignal<T>(message: Message<T>): boolean {
 		return this.signals.has(message);
 	}
-	getMessageSignal<DataType>(message: Message<any>): Signal<Packet<RemotePeerType, DataType>> {
+	getMessageSignal<T>(message: Message<T>): Signal<Packet<RemotePeerType, T>> {
 		
 		let signal = this.signals.get(message);
 		
 		if (!signal) {
-			signal = new Signal<Packet<RemotePeerType, DataType>>();
+			signal = new Signal<Packet<RemotePeerType, T>>();
 			this.signals.set(message, signal);
 		}
 		
@@ -212,12 +210,19 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		
 	}
 	
-	addCallback(message: Message<any>, callback: (packet: Packet<RemotePeerType, any>) => void): void {
-		this.getMessageSignal(message).connect(callback);
+	addCallback<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
+		this.getMessageSignal<T>(message).connect(callback);
 	}
-	removeCallback(message: Message<any>, callback: (packet: Packet<RemotePeerType, any>) => void): void {
+	removeCallback<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
 		if (this.hasMessageSignal(message))
-			this.getMessageSignal(message).disconnect(callback);
+			this.getMessageSignal<T>(message).disconnect(callback);
+	}
+	
+	onMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
+		this.addCallback(message, callback);
+	}
+	subscribeMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void, chain?: () => void): () => void {
+		return this.getMessageSignal(message).subscribe(callback, chain);
 	}
 	
 	addCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
@@ -238,9 +243,6 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 		
 	}
 	
-	onMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
-		this.addCallback(message, callback);
-	}
 	
 	handlePacket(packet: Packet<RemotePeerType, any>): void {
 		
@@ -389,18 +391,26 @@ class Peer {
 	public id = -1;
 	public state = new State(ConnectionState.NEW);
 	
-	public connected = new Signal<void>();
+	public connected = this.state.transitionTo(ConnectionState.CONNECTED);
+	public disconnected = this.state.transition(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
+	
+	//public connecting = this.state.transition([ ConnectionState.NEW, ConnectionState.DISCONNECTED ], ConnectionState.CONNECTING);
+	public connecting = this.state.transitionTo(ConnectionState.CONNECTING);
+	public connectionFailed = this.state.transition(ConnectionState.CONNECTING, ConnectionState.DISCONNECTED);
+	// Maybe should also see NEW -> DISCONNECTED
+	
+	/*public connected = new Signal<void>();
 	public disconnected = new Signal<void>();
 	
 	public connecting = new Signal<void>();
-	public connectionFailed = new Signal<void>();
+	public connectionFailed = new Signal<void>();*/
 	
 	public closed = new Signal<void>();
 	
 	
 	constructor() {
 		
-		this.state.changed.connect(([oldState, newState]): void => {
+		/*this.state.changed.connect(([oldState, newState]): void => {
 			
 			switch (newState) {
 				
@@ -426,7 +436,7 @@ class Peer {
 				
 			}
 			
-		});
+		});*/
 		
 	}
 	
@@ -442,8 +452,9 @@ class Peer {
 	
 	public close() {
 		
-		this.state.set(ConnectionState.DISCONNECTED);
 		this.closed.emit();
+		this.state.set(ConnectionState.DISCONNECTED);
+		//this.closed.emit();
 		
 	}
 	
@@ -603,6 +614,8 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 		}
 		
 	}
+	
+	// Conditions should maybe only take an iterable, since they're meant for multiple messages anyway
 	public addCondition<T>(messages: Message<T> | Iterable<Message<T>>, condition: (packet: Packet<RemotePeerType, T>) => string | void): void {
 		this.verifyHasMessages(messages);
 		this.messageHandler.addCondition(messages, condition);
@@ -622,7 +635,10 @@ class LocalPeer<RemotePeerType extends RemotePeer | void> extends Peer {
 	public onMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void): void {
 		this.addCallback(message, callback);
 	}
-	// Maybe verify that the 
+	public subscribeMessage<T>(message: Message<T>, callback: (packet: Packet<RemotePeerType, T>) => void, chain?: () => void): () => void {
+		this.verifyHasMessages(message);
+		return this.messageHandler.subscribeMessage(message, callback, chain);
+	}
 	
 }
 export class LocalMonoPeer extends LocalPeer<void> {
@@ -719,9 +735,18 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		}
 		
 	}
+	/*public disconnectPeer(peer: RemotePeerType) {
+		peer.state.set(ConnectionState.DISCONNECTED);
+	}*/
+	
 	public dropPeer(peer: RemotePeerType) {
 		
-		if (this.getPeer(peer.getID()) != peer)
+		//if (peer.state.is(ConnectionState.CONNECTED))
+		//	peer.state.set(ConnectionState.DISCONNECTED);
+		peer.close();
+		//this.disconnectPeer(peer);
+		
+		if (this.getPeer(peer.getID()) !== peer)
 			console.error("Attempted to drop invalid peer.");
 		
 		if (!this.peerListeners.has(peer)) {
@@ -733,11 +758,12 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		}
 		
 		this.peerIndex.remove(peer.getID());
-		//peer.close();
-		
 		this.peerDropped.emit(peer);
 		
 	}
+	//public disconnectPeer(): void {
+	//	
+	//}
 	
 	public getStatus(): MultiPeerConnectionStatus<RemotePeerType> {
 		return this.peerIndex.getStatus();
@@ -781,15 +807,15 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		
 	}
 	
-	public send<T>(target: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
+	public send<T>(target: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data?: T, transferMode = message.getTransferMode()): void {
 		//this.sendRaw(target, this.messageIndex.createRaw(message, data), transferMode);
 		this.sendRaw(target, this.createRaw(message, data), transferMode);
 	}
-	public sendAll<T>(message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
+	public sendAll<T>(message: Message<T>, data?: T, transferMode = message.getTransferMode()): void {
 		//this.sendRawAll(this.messageDomain.createRaw(message, data), transferMode);
 		this.sendRawAll(this.createRaw(message, data), transferMode);
 	}
-	public sendAllExcept<T>(exclusions: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data: T, transferMode = message.getTransferMode()): void {
+	public sendAllExcept<T>(exclusions: RemotePeerType | Iterable<RemotePeerType>, message: Message<T>, data?: T, transferMode = message.getTransferMode()): void {
 		//this.sendRawAllExcept(exclusions, this.messageIndex.createRaw(message, data), transferMode);
 		this.sendRawAllExcept(exclusions, this.createRaw(message, data), transferMode);
 	}
@@ -880,8 +906,10 @@ export class Group<PeerType extends RemotePeer> {
 	//public filled = new Signal<void>();
 	
 	public peersAdded = new Signal<Array<PeerType>>();
+	public peersLeaving = new Signal<Array<PeerType>>();
 	public peersRemoved = new Signal<Array<PeerType>>();
-	protected peersLeaving = new Signal<Array<PeerType>>();
+	
+	//public peerAdded = new Signal<
 	
 	//protected stratum?: GroupStratum;
 	protected stratum?: Set<Group<PeerType>>;
@@ -973,12 +1001,16 @@ export class Group<PeerType extends RemotePeer> {
 			
 		}
 		
-		for (const peer of added)
-			this.peers.add(peer);
-		for (const peer of added)
-			peer.handleGroupEntry(this);
+		if (added.length > 0) {
+			
+			for (const peer of added)
+				this.peers.add(peer);
+			for (const peer of added)
+				peer.handleGroupEntry(this);
+			
+			this.peersAdded.emit(added);
 		
-		this.peersAdded.emit(added);
+		}
 		
 		return added;
 		
@@ -994,14 +1026,18 @@ export class Group<PeerType extends RemotePeer> {
 			if (this.has(peer))
 				removed.push(peer);
 		
-		this.peersLeaving.emit(removed);
-		
-		for (const peer of removed)
-			this.peers.delete(peer);
-		for (const peer of removed)
-			peer.handleGroupExit(this);
-		
-		this.peersRemoved.emit(removed);
+		if (removed.length > 0) {
+			
+			this.peersLeaving.emit(removed);
+			
+			for (const peer of removed)
+				this.peers.delete(peer);
+			for (const peer of removed)
+				peer.handleGroupExit(this);
+			
+			this.peersRemoved.emit(removed);
+			
+		}
 		
 		return removed;
 		

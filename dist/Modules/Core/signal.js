@@ -52,6 +52,15 @@ class Signal extends Set {
         newSignal.bindSignal(signal);
         return newSignal;
     }
+    /*static fromStateTransition<T>(state: State<T>, from: T, to: T) {
+        
+    }
+    static fromStateTransitionTo<T>(state: State<T>, ...states: Array<T>): Signal {
+        
+    }
+    static fromStateTransitionFrom<T>(state: State<T>, ...states: Array<T>): Signal {
+        
+    }*/
     bindEvent(emitter, event) {
         emitter.on(event, this.emit.bind(this));
     }
@@ -72,6 +81,14 @@ class Signal extends Set {
     }
     disconnectAll() {
         this.clear();
+    }
+    subscribe(callback, chain) {
+        this.connect(callback);
+        return () => {
+            if (chain !== undefined)
+                chain();
+            this.disconnect(callback);
+        };
     }
     emit(arg) {
         for (const callback of this) {

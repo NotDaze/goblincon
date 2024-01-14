@@ -1,5 +1,5 @@
 
-
+// Maybe make this extend map
 export class ArrayMap<KeyType, ValueType> {
 	
 	private map = new Map<KeyType, Array<ValueType>>();

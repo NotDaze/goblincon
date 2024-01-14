@@ -72,8 +72,7 @@ class Message {
     arg;
     transferMode; // Not sure this is actually necessary, but eh
     //private conditions = new Array<(packet: Packet) => boolean>;
-    constructor(arg, transferMode = TransferMode.RELIABLE) {
-        //super();
+    constructor(arg = arg_1.default.NONE, transferMode = TransferMode.RELIABLE) {
         this.arg = arg;
         this.transferMode = transferMode;
     }
@@ -194,6 +193,12 @@ class MessageHandler {
         if (this.hasMessageSignal(message))
             this.getMessageSignal(message).disconnect(callback);
     }
+    onMessage(message, callback) {
+        this.addCallback(message, callback);
+    }
+    subscribeMessage(message, callback, chain) {
+        return this.getMessageSignal(message).subscribe(callback, chain);
+    }
     addCondition(messages, condition) {
         for (const message of (messages instanceof Message ? [messages] : messages)) {
             if (!this.conditions.has(message))
@@ -205,9 +210,6 @@ class MessageHandler {
         for (const message of (messages instanceof Message ? [messages] : messages))
             if (this.conditions.has(message))
                 this.conditions.get(message)?.delete(condition);
-    }
-    onMessage(message, callback) {
-        this.addCallback(message, callback);
     }
     handlePacket(packet) {
         if (this.hasMessageSignal(packet.message)) {
@@ -295,30 +297,46 @@ exports.RemotePeerIndex = RemotePeerIndex;
 class Peer {
     id = -1;
     state = new state_1.default(ConnectionState.NEW);
-    connected = new signal_1.default();
-    disconnected = new signal_1.default();
-    connecting = new signal_1.default();
-    connectionFailed = new signal_1.default();
+    connected = this.state.transitionTo(ConnectionState.CONNECTED);
+    disconnected = this.state.transition(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED);
+    //public connecting = this.state.transition([ ConnectionState.NEW, ConnectionState.DISCONNECTED ], ConnectionState.CONNECTING);
+    connecting = this.state.transitionTo(ConnectionState.CONNECTING);
+    connectionFailed = this.state.transition(ConnectionState.CONNECTING, ConnectionState.DISCONNECTED);
+    // Maybe should also see NEW -> DISCONNECTED
+    /*public connected = new Signal<void>();
+    public disconnected = new Signal<void>();
+    
+    public connecting = new Signal<void>();
+    public connectionFailed = new Signal<void>();*/
     closed = new signal_1.default();
     constructor() {
-        this.state.changed.connect(([oldState, newState]) => {
+        /*this.state.changed.connect(([oldState, newState]): void => {
+            
             switch (newState) {
+                
                 case ConnectionState.NEW:
                     break;
+                
                 case ConnectionState.CONNECTING:
                     this.connecting.emit();
                     break;
+                
                 case ConnectionState.CONNECTED:
                     this.connected.emit();
                     break;
+                
                 case ConnectionState.DISCONNECTED:
+                    
                     if (oldState == ConnectionState.CONNECTED)
                         this.disconnected.emit();
                     else
                         this.connectionFailed.emit();
+                    
                     break;
+                
             }
-        });
+            
+        });*/
     }
     hasID() {
         return this.id >= 0;
@@ -330,8 +348,9 @@ class Peer {
         this.id = newID;
     }
     close() {
-        this.state.set(ConnectionState.DISCONNECTED);
         this.closed.emit();
+        this.state.set(ConnectionState.DISCONNECTED);
+        //this.closed.emit();
     }
 }
 class LocalPeer extends Peer {
@@ -444,6 +463,7 @@ class LocalPeer extends Peer {
                     throw new Error("Invalid LocalPeer message.");
         }
     }
+    // Conditions should maybe only take an iterable, since they're meant for multiple messages anyway
     addCondition(messages, condition) {
         this.verifyHasMessages(messages);
         this.messageHandler.addCondition(messages, condition);
@@ -462,6 +482,10 @@ class LocalPeer extends Peer {
     }
     onMessage(message, callback) {
         this.addCallback(message, callback);
+    }
+    subscribeMessage(message, callback, chain) {
+        this.verifyHasMessages(message);
+        return this.messageHandler.subscribeMessage(message, callback, chain);
     }
 }
 class LocalMonoPeer extends LocalPeer {
@@ -529,8 +553,15 @@ class LocalMultiPeer extends LocalPeer {
                 break;
         }
     }
+    /*public disconnectPeer(peer: RemotePeerType) {
+        peer.state.set(ConnectionState.DISCONNECTED);
+    }*/
     dropPeer(peer) {
-        if (this.getPeer(peer.getID()) != peer)
+        //if (peer.state.is(ConnectionState.CONNECTED))
+        //	peer.state.set(ConnectionState.DISCONNECTED);
+        peer.close();
+        //this.disconnectPeer(peer);
+        if (this.getPeer(peer.getID()) !== peer)
             console.error("Attempted to drop invalid peer.");
         if (!this.peerListeners.has(peer)) {
             console.error("Dropping peer that has no listener.");
@@ -540,9 +571,11 @@ class LocalMultiPeer extends LocalPeer {
             this.peerListeners.delete(peer);
         }
         this.peerIndex.remove(peer.getID());
-        //peer.close();
         this.peerDropped.emit(peer);
     }
+    //public disconnectPeer(): void {
+    //	
+    //}
     getStatus() {
         return this.peerIndex.getStatus();
     }
@@ -643,8 +676,9 @@ class Group {
     //public emptied = new Signal<void>();
     //public filled = new Signal<void>();
     peersAdded = new signal_1.default();
-    peersRemoved = new signal_1.default();
     peersLeaving = new signal_1.default();
+    peersRemoved = new signal_1.default();
+    //public peerAdded = new Signal<
     //protected stratum?: GroupStratum;
     stratum;
     capacity;
@@ -712,11 +746,13 @@ class Group {
                 break;
             }
         }
-        for (const peer of added)
-            this.peers.add(peer);
-        for (const peer of added)
-            peer.handleGroupEntry(this);
-        this.peersAdded.emit(added);
+        if (added.length > 0) {
+            for (const peer of added)
+                this.peers.add(peer);
+            for (const peer of added)
+                peer.handleGroupEntry(this);
+            this.peersAdded.emit(added);
+        }
         return added;
     }
     ;
@@ -727,12 +763,14 @@ class Group {
         for (const peer of peers)
             if (this.has(peer))
                 removed.push(peer);
-        this.peersLeaving.emit(removed);
-        for (const peer of removed)
-            this.peers.delete(peer);
-        for (const peer of removed)
-            peer.handleGroupExit(this);
-        this.peersRemoved.emit(removed);
+        if (removed.length > 0) {
+            this.peersLeaving.emit(removed);
+            for (const peer of removed)
+                this.peers.delete(peer);
+            for (const peer of removed)
+                peer.handleGroupExit(this);
+            this.peersRemoved.emit(removed);
+        }
         return removed;
     }
     ;

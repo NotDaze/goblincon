@@ -45,7 +45,7 @@ export default class DrawPad extends React.Component {
 		
 		return (
 			<button
-				className="color-button"
+				className="color-btn"
 				style={unselectedStyle}
 				onClick={onClick}
 			/>
@@ -57,7 +57,7 @@ export default class DrawPad extends React.Component {
 		const Color = this.Color.bind(this);
 		
 		return (
-			<div id="drawpad-color-container" className="flex">
+			<div id="color-ctr">
 				{colors.map(color => <Color key={color} color={color}/>)}
 			</div>
 		);
@@ -116,7 +116,7 @@ export default class DrawPad extends React.Component {
 			this.canvas.mapY(ev.nativeEvent.offsetY),
 			this.canvas.mapX(ev.nativeEvent.offsetX - ev.movementX),
 			this.canvas.mapY(ev.nativeEvent.offsetY - ev.movementY)
-		)
+		);
 		
 	}
 	private Canvas() {
@@ -141,7 +141,7 @@ export default class DrawPad extends React.Component {
 		
 		const canvasComponent = (
 			<canvas 
-				ref={canvasRef} id="drawpad-canvas"
+				ref={canvasRef} id="canvas"
 				width="360px" height="360px"
 				onMouseDown= {canvasStartDraw}
 				onMouseMove= {canvasDraw}
@@ -164,7 +164,7 @@ export default class DrawPad extends React.Component {
 		const Canvas = this.Canvas.bind(this);
 		
 		return (
-			<div id="drawpad" className="flex">
+			<div id="drawpad">
 				<ColorContainer />
 				<Canvas />
 			</div>

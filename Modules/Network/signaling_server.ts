@@ -181,7 +181,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 				
 			}
 			
-			this.attemptInitialize();
+			//this.attemptInitialize();
 			this.checkStability();
 			
 		});
@@ -211,7 +211,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		
 		this.stabilized.connect((): void => {
 			
-			this.sendAll(MESH_STABILIZED, undefined);
+			this.sendAll(MESH_STABILIZED);
 			console.log("Stabilized!");
 			
 		});
@@ -233,7 +233,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 	
 	private calculateStability(): boolean {
 		
-		if (!this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
+		if (!this.isActive())
 			return false;
 		
 		if (this.isEmpty())
@@ -274,7 +274,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 	
 	private createSocketConnections(newSocket: SocketType): void {
 		
-		if (!this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
+		if (!this.isActive())
 			return; // if new or disconnected, don't make connections
 		
 		this.send(newSocket, MESH_INITIALIZE, {
@@ -291,9 +291,9 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		
 		this.send(exitingSocket, MESH_TERMINATE);
 		
-		if (!this.state.is(ConnectionState.DISCONNECTED)) {
+		if (this.isActive()) {
+			// if new nothing needs to disconnect
 			// if disconnected everything is terminating already
-			
 			this.sendAllExcept(exitingSocket, MESH_DISCONNECT_PEERS, {
 				peerIDs: [ exitingSocket.getMeshID() ]
 			});
@@ -311,12 +311,15 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		
 	}
 	
+	public isActive(): boolean {
+		return this.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED);
+	}
 	public isJoinable(): boolean {
 		return this.state.any(ConnectionState.NEW, ConnectionState.CONNECTING, ConnectionState.CONNECTED) && !this.isFull();
 	}
 	
 	public canInitialize(): boolean {
-		return this.state.is(ConnectionState.NEW); // && this.getPeerCount() >= this.startThreshold;
+		return this.state.is(ConnectionState.NEW);// && this.getPeerCount() >= 2; // && this.getPeerCount() >= this.startThreshold;
 	}
 	public initialize(): void {
 		
@@ -504,7 +507,7 @@ export class SignalingSocket extends Socket {
 	public getConnectionState(node: SignalingSocket): ConnectionState {
 		
 		let state = this.connectionStates.get(node);
-		return state != null ? state : ConnectionState.CONNECTING;
+		return state !== undefined ? state : ConnectionState.CONNECTING;
 		
 	}
 	
@@ -546,7 +549,7 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 				
 				let mesh = this.getPeerMesh(packet.peer);
 				
-				if (!mesh || !mesh.has(packet.peer) || !mesh.state.any(ConnectionState.CONNECTING, ConnectionState.CONNECTED))
+				if (!mesh || !mesh.has(packet.peer) || !mesh.isActive())
 					return "No active mesh.";
 				
 			}

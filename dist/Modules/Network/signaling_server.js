@@ -147,7 +147,7 @@ class Mesh extends network_1.Group {
                 this.createSocketConnections(socket);
                 console.log(`Socket joined: ${socket.getMeshID()}/${socket.getID()}`);
             }
-            this.attemptInitialize();
+            //this.attemptInitialize();
             this.checkStability();
         });
         this.peersLeaving.connect((peers) => {
@@ -166,7 +166,7 @@ class Mesh extends network_1.Group {
                 this.kill();
         });
         this.stabilized.connect(() => {
-            this.sendAll(signaling_1.MESH_STABILIZED, undefined);
+            this.sendAll(signaling_1.MESH_STABILIZED);
             console.log("Stabilized!");
         });
         this.destabilized.connect(() => {
@@ -181,7 +181,7 @@ class Mesh extends network_1.Group {
     }
     //public getPeerIDs(peers: Iterable<SocketType>): 
     calculateStability() {
-        if (!this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
+        if (!this.isActive())
             return false;
         if (this.isEmpty())
             return false;
@@ -208,7 +208,7 @@ class Mesh extends network_1.Group {
         this.setStability(this.calculateStability());
     }
     createSocketConnections(newSocket) {
-        if (!this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
+        if (!this.isActive())
             return; // if new or disconnected, don't make connections
         this.send(newSocket, signaling_1.MESH_INITIALIZE, {
             localID: newSocket.getMeshID(),
@@ -220,7 +220,8 @@ class Mesh extends network_1.Group {
     }
     destroySocketConnections(exitingSocket) {
         this.send(exitingSocket, signaling_1.MESH_TERMINATE);
-        if (!this.state.is(network_1.ConnectionState.DISCONNECTED)) {
+        if (this.isActive()) {
+            // if new nothing needs to disconnect
             // if disconnected everything is terminating already
             this.sendAllExcept(exitingSocket, signaling_1.MESH_DISCONNECT_PEERS, {
                 peerIDs: [exitingSocket.getMeshID()]
@@ -236,11 +237,14 @@ class Mesh extends network_1.Group {
             });
         }*/
     }
+    isActive() {
+        return this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED);
+    }
     isJoinable() {
         return this.state.any(network_1.ConnectionState.NEW, network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED) && !this.isFull();
     }
     canInitialize() {
-        return this.state.is(network_1.ConnectionState.NEW); // && this.getPeerCount() >= this.startThreshold;
+        return this.state.is(network_1.ConnectionState.NEW); // && this.getPeerCount() >= 2; // && this.getPeerCount() >= this.startThreshold;
     }
     initialize() {
         this.state.set(network_1.ConnectionState.CONNECTING);
@@ -377,7 +381,7 @@ class SignalingSocket extends websocket_server_1.Socket {
     }
     getConnectionState(node) {
         let state = this.connectionStates.get(node);
-        return state != null ? state : network_1.ConnectionState.CONNECTING;
+        return state !== undefined ? state : network_1.ConnectionState.CONNECTING;
     }
 }
 exports.SignalingSocket = SignalingSocket;
@@ -403,7 +407,7 @@ class SignalingServer extends websocket_server_1.SocketServer {
             signaling_1.MESH_ICE_CANDIDATE_CREATED
         ], (packet) => {
             let mesh = this.getPeerMesh(packet.peer);
-            if (!mesh || !mesh.has(packet.peer) || !mesh.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
+            if (!mesh || !mesh.has(packet.peer) || !mesh.isActive())
                 return "No active mesh.";
         });
         this.addCondition(// Valid transport request

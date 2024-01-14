@@ -50,11 +50,14 @@ class RemoteMeshClient extends network_1.RemotePeer {
     connection = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["stun:stun.l.google.com:19302"]
+                urls: ["stun:stun.l.google.com", "stun:stun1.l.google.com"]
             }
         ]
     });
-    channels = new Map; // Overkill
+    channels = new Map(); // Overkill
+    /*private channels = {
+        TransferMode.RELIABLE:
+    };*/
     //private channelReliable = );
     //private channelUnreliable = );
     //private a = this.rtcConnection.createDataChannel()
@@ -163,10 +166,9 @@ class RemoteMeshClient extends network_1.RemotePeer {
         if (this.connection.connectionState !== "connected")
             return;
         // All channels must be open
-        for (const channel of this.channels.values()) {
+        for (const channel of this.channels.values())
             if (channel.readyState !== "open")
                 return;
-        }
         // We're fully connected
         this.state.set(network_1.ConnectionState.CONNECTED);
     }
@@ -262,6 +264,10 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     serverConnected;
     serverDisconnected;
     serverConnectionFailed;
+    meshInitialized = this.state.transition([network_1.ConnectionState.NEW, network_1.ConnectionState.DISCONNECTED], [network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED]);
+    meshTerminated = this.state.transition([network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED], [network_1.ConnectionState.NEW, network_1.ConnectionState.DISCONNECTED]);
+    //meshJoined = new Signal<void>();
+    //meshLeft = new Signal<void>();
     //serverConnecting: Signal<void>;
     socket;
     clientClass;
@@ -280,8 +286,12 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         this.serverConnected.connect(() => {
             console.log("Connected to server");
         });
-        this.connected.connect(() => {
+        /*this.connected.connect(() => {
             //this.sendServer(MESH_);
+        });*/
+        this.meshInitialized.connect(() => {
+            for (const peer of this.peers)
+                this.connectPeer(peer);
         });
         this.peerAdded.connect((peer) => {
             peer.sessionDescriptionCreated.connect((description) => {
@@ -300,10 +310,8 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
                     usernameFragment: candidate.usernameFragment
                 });
             });
-            if (this.id > peer.id)
-                peer.createOffer();
-            if (this.state.is(network_1.ConnectionState.CONNECTED)) // Late join, tell the server about it
-                this.sendStatus();
+            if (this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED))
+                this.connectPeer(peer);
         });
         this.peerDropped.connect((peer) => {
             peer.close();
@@ -313,7 +321,7 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         this.peerConnectionFailed.connect((peer) => {
             //this.checkAndSendStatus();
             //this.state.set(ConnectionState.DISCONNECTED);
-            this.close();
+            //this.close();
             // TODO improve
         });
         this.peerConnected.connect((peer) => {
@@ -331,14 +339,16 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
                 this.sendStatus();
             }
         });
+        // Dropped vs disconnected??
         this.peerDisconnected.connect((peer) => {
-            if (this.state.is(network_1.ConnectionState.CONNECTING)) {
+            /*if (this.state.is(ConnectionState.CONNECTING)) {
                 //console.error("Connection failed.");
                 this.close();
-            }
+            }*/
         });
         this.closed.connect(() => {
             this.state.set(network_1.ConnectionState.DISCONNECTED);
+            // Come back to this
             for (const peer of this.getPeers())
                 this.dropPeer(peer);
         });
@@ -361,24 +371,27 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
             signaling_1.MESH_ICE_CANDIDATE_CREATED
         ], (packet) => {
             let peer = this.getPeer(packet.data.peerID);
-            if (peer == undefined || !peer.state.is(network_1.ConnectionState.CONNECTING))
+            if (peer === undefined) // || !peer.state.any(ConnectionState.NEW, ConnectionState.CONNECTING))
                 return "Invalid SDP/ICE transport.";
         });
         this.onServerMessage(signaling_1.MESH_INITIALIZE, packet => {
             if (this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED)) {
-                console.error("Attempted to initialize mesh that is already initialized.");
+                console.error("Attempted to initialize mesh that is already connecting or connected.");
                 return;
             }
-            packet.data;
             //console.log(packet.data.localID, packet.data.peerIDs);
-            this.state.set(network_1.ConnectionState.CONNECTING);
             this.setID(packet.data.localID);
             this.createPeers(packet.data.peerIDs);
+            this.state.set(network_1.ConnectionState.CONNECTING);
+            //this.meshInitialized.emit();
+            //this.meshJoined.emit();
         });
         this.onServerMessage(signaling_1.MESH_TERMINATE, packet => {
+            this.setID(-1);
             this.close();
         });
         this.onServerMessage(signaling_1.MESH_CONNECT_PEERS, packet => {
+            //console.log("Creating peers")
             this.createPeers(packet.data.peerIDs);
         });
         this.onServerMessage(signaling_1.MESH_DISCONNECT_PEERS, packet => {
@@ -404,10 +417,26 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
         //});
     }
     createPeers(ids) {
-        for (const id of ids) {
-            if (id !== this.id && !this.ids.has(id)) // Error message?
-                this.addPeer(new this.clientClass(), id);
-        }
+        for (const id of ids)
+            //if (id !== this.id && !this.ids.has(id)) // Error message?
+            this.getOrCreatePeer(id);
+    }
+    createPeer(id) {
+        if (id === this.id)
+            return;
+        let peer = new this.clientClass();
+        this.addPeer(peer, id);
+        return peer;
+    }
+    getOrCreatePeer(id) {
+        let peer = this.getPeer(id);
+        return peer === undefined ? this.createPeer(id) : peer;
+    }
+    connectPeer(peer) {
+        if (this.id > peer.id)
+            peer.createOffer();
+        if (this.state.is(network_1.ConnectionState.CONNECTED)) // Late join, tell the server about it
+            this.sendStatus();
     }
     dropPeers(ids) {
         for (const id of ids) {
@@ -433,6 +462,9 @@ class LocalMeshClient extends network_1.LocalMultiPeer {
     }*/
     sendStatus(status = this.getIDStatus()) {
         this.sendServer(signaling_1.MESH_CLIENT_STATUS_UPDATE, status);
+    }
+    isActive() {
+        return this.state.any(network_1.ConnectionState.CONNECTING, network_1.ConnectionState.CONNECTED);
     }
     isStable() {
         return this.stable;
