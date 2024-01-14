@@ -1,11 +1,8 @@
+import React from "react";
 
+import { createRoot } from "react-dom/client";
 
-import React from "react"
-import ReactDOM from "react-dom"
-import { createRoot } from "react-dom/client"
-
-import App from "./Components/app"
-
+import App from "./Components/app";
 
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
@@ -13,6 +10,3 @@ root.render(<App />);
 /*gameClient.serverConnected.connect(() => {
 	gameClient.createGame();
 });*/
-
-
-
