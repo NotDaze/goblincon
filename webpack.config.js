@@ -1,4 +1,3 @@
-//const webpack = require("webpack")
 const path = require("path");
 
 const CopyPlugin = require("copy-webpack-plugin");
@@ -36,9 +35,6 @@ module.exports = [
     plugins: [
       new CopyPlugin({
         patterns: [
-          //"Public/index.html"
-          //{ from: "source", to: "dist" },
-          //{ from: "./Public/index.html", to: "dist/Public/index.html" },
           {
             from: "./Public",
             globOptions: {
@@ -58,7 +54,6 @@ module.exports = [
       filename: "app.js",
       path: path.resolve(__dirname, "dist/"),
     },
-
     module: {
       rules: [
         {

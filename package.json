@@ -5,7 +5,9 @@
   "main": "./dist/app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "main": "webpack && node dist/app.js"
+    "main": "webpack && npm run start",
+    "watch": "webpack --watch",
+    "start": "node dist/app.js"
   },
   "author": "",
   "license": "ISC",
