@@ -1,11 +1,12 @@
 
 
 import React from "react";
-import LocalGameClient from "../../game_client";
+import client from "../../client_instance";
+//import LocalGameClient from "../../game_client";
 
 const urlParams = new URLSearchParams(window.location.search);
 
-export default function Landing({ client }: { client: LocalGameClient }) {
+export default function Landing() {
 	
 	const sanitize = (value: string | null) => value === null ? "" : value;
 	

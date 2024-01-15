@@ -1,23 +1,34 @@
 
 
 import React from "react";
-import DrawPad from "../draw_pad";
-import LocalGameClient from '../../game_client';
+import client from "../../client_instance";
+//import LocalGameClient from '../../game_client';
 
 import Drawing from "./Game/drawing";
 import Voting from "./Game/voting";
-import { RemoteGameClient } from '../../game_client';
+//import { RemoteGameClient } from '../../game_client';
 
 
-
-
-export default function Game({ client }: { client: LocalGameClient }) {
+const Tabs = {
 	
-	const [tab, setTab] = React.useState(<Drawing client={client} />);
+	Drawing,
+	Voting
+	
+}
+
+export default function Game() {
+	
+	const [tab, setTab] = React.useState<keyof typeof Tabs>("Drawing");
+	const Tab = Tabs[tab];
+	
+	React.useEffect(() => (
+		client.drawingStarted.subscribe(() => setTab("Drawing"),
+		client.votingStarted.subscribe(() => setTab("Voting")))
+	), []);
 	
 	return (
 		<div id="game" className="tab" >
-			{ tab }
+			<Tab />
 		</div>
 	);
 }

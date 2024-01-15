@@ -1,8 +1,10 @@
 
 
-import React from "react";
+import React, { ReactPropTypes } from "react";
 import Canvas from "../../Modules/Client/Rendering/canvas";
-import LocalGameClient from "../game_client";
+import client from "../client_instance";
+
+//import LocalGameClient from "../game_client";
 
 const colors = [
 	"#FF0000",
@@ -15,22 +17,175 @@ const colors = [
 	"#000000",
 ];
 
-export default class DrawPad extends React.Component {
+function Color({ color, setColor }: { color: string, setColor: (color: string) => void }) {
+	
+	const unselectedStyle = {
+		backgroundColor: color
+		
+	};
+	/*const selectedStyle = {
+		backgroundColor: props.color
+	}*/
+	
+	
+	return (
+		<button
+			className="color-btn"
+			style={unselectedStyle}
+			onClick={ev => setColor(color)}
+		/>
+	);
+	
+}
+function ColorContainer({ setColor }: { setColor: (color: string) => void }) {
+	
+	return (
+		<div id="color-ctr">
+			{colors.map(color => <Color key={color} color={color} setColor={setColor} />)}
+		</div>
+	);
+	
+}
+
+const DrawCanvas = ({ canvasRef, startDraw, endDraw, draw }: {
+	canvasRef: React.RefObject<HTMLCanvasElement>,
+	startDraw: (ev: React.MouseEvent) => void,
+	endDraw: (ev: React.MouseEvent) => void,
+	draw: (ev: React.MouseEvent) => void
+},) => {
+	
+	const canvasComponent = (
+		<canvas 
+			id="canvas"
+			width="360px" height="360px"
+			ref={canvasRef}
+			onMouseDown= {startDraw}
+			onMouseUp=   {endDraw}
+			onMouseLeave={endDraw}
+			onMouseMove= {draw}
+		>
+			You don't have canvas support!
+		</canvas>
+	);
+	
+	return canvasComponent;
+
+}
+
+/*const DrawCanvas = React.forwardRef(({ startDraw, endDraw, draw }: {
+		startDraw: (ev: React.MouseEvent) => void,
+		endDraw: (ev: React.MouseEvent) => void,
+		draw: (ev: React.MouseEvent) => void
+	}, ref: React.ForwardedRef<HTMLCanvasElement>) => {
+	
+	const canvasComponent = (
+		<canvas 
+			id="canvas"
+			width="360px" height="360px"
+			ref={ref}
+			onMouseDown= {startDraw}
+			onMouseUp=   {endDraw}
+			onMouseLeave={endDraw}
+			onMouseMove= {draw}
+		>
+			You don't have canvas support!
+		</canvas>
+	);
+	
+	return canvasComponent;
+	
+})*/
+
+export default function DrawPad() {
+	
+	const canvasElementRef = React.useRef<HTMLCanvasElement>(null);
+	
+	let canvas: Canvas | undefined;
+	let drawing = false;
+	
+	const setColor = (color: string) => {
+		canvas?.setStrokeStyle(color);
+	}
+	
+	const draw = (ev: React.MouseEvent) => {
+		
+		if (!drawing || !canvas)
+			return;
+		
+		canvas.line(
+			canvas.mapX(ev.nativeEvent.offsetX),
+			canvas.mapY(ev.nativeEvent.offsetY),
+			canvas.mapX(ev.nativeEvent.offsetX - ev.movementX),
+			canvas.mapY(ev.nativeEvent.offsetY - ev.movementY)
+		);
+		
+	}
+	const startDraw = (ev: React.MouseEvent) => {
+		
+		if (drawing)
+			return;
+		
+		drawing = true;
+		draw(ev);
+		
+	}
+	const endDraw = (ev: React.MouseEvent) => {
+		
+		if (!drawing)
+			return;
+		
+		drawing = false;
+		draw(ev);
+		
+	}
+	
+	React.useEffect(() => {
+		
+		let ctx = canvasElementRef.current?.getContext("2d");
+		
+		if (!ctx)
+			throw new Error("Couldn't get canvas context.");
+		
+		canvas = new Canvas(ctx);
+		canvas.setStrokeStyle("black");
+		canvas.setLineWidth(8);
+		canvas.setLineCap("round");
+		
+	}, [canvasElementRef.current]);
+	React.useEffect(() => client.doneDrawing.subscribe(() => {
+		
+		if (canvasElementRef.current === null)
+			throw new Error("Couldn't get canvas data");
+		
+		client.handleDrawingData(canvasElementRef.current.toDataURL("image/jpeg"));
+		
+	}), [canvasElementRef.current]);
+	
+	return (
+		<div id="drawpad">
+			<ColorContainer setColor={setColor} />
+			<DrawCanvas
+				canvasRef={canvasElementRef}
+				startDraw={startDraw}
+				endDraw={endDraw}
+				draw={draw}
+			/>
+		</div>
+	);
+	
+}
+
+/*export default class DrawPad extends React.Component {
 	
 	
 	private canvas?: Canvas;
 	private drawing = false;
 	
-	constructor() {
+	constructor(props: ReactPropTypes) {
 		
-		super({});
+		super(props: ReactProp);
 		
-		/*client.drawingEnded.connect(() => {
-			
-			if (this.canvas !== undefined)
-				client.sendDrawingData(this.canvas.ctx.getImageData(0, 0, this.canvas.sourceWidth, this.canvas.sourceHeight));
-			
-		});*/
+		
 		
 	}
 	
@@ -47,9 +202,6 @@ export default class DrawPad extends React.Component {
 			backgroundColor: props.color,
 			
 		};
-		/*const selectedStyle = {
-			backgroundColor: props.color
-		}*/
 		
 		
 		return (
@@ -110,17 +262,6 @@ export default class DrawPad extends React.Component {
 			return;
 		if (!this.canvas)
 			return;
-		
-		/*const scaleX = this.canvas.width / this.canvas.element.clientWidth;
-		const scaleY = this.canvas.height / this.canvas.element.clientHeight;
-		
-		
-		let toX = ev.nativeEvent.offsetX * scaleX;
-		let toY = ev.nativeEvent.offsetY * scaleX;
-		let fromX = toX - scaleX * ev.movementX;
-		let fromY = toY - scaleY * ev.movementY;
-		
-		this.canvas.line(fromX, fromY, toX, toY);*/
 		
 		this.canvas.line(
 			this.canvas.mapX(ev.nativeEvent.offsetX),
@@ -183,10 +324,8 @@ export default class DrawPad extends React.Component {
 		
 	}
 	
-}
+}*/
 /*
 export default function DrawPad({ client }: { client: LocalGameClient }) {
 	
 }*/
-
-

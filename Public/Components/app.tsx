@@ -1,5 +1,5 @@
 //import DrawPadCanvas from "../../Modules/draw_pad_canvas";
-import React, { useRef } from "react";
+import React from "react";
 //import Canvas from "../../Modules/Client/Rendering/canvas";
 
 import Connecting from "./Tabs/connecting";
@@ -7,7 +7,9 @@ import Landing from "./Tabs/landing";
 import Lobby from "./Tabs/lobby";
 import Game from "./Tabs/game";
 
-import LocalGameClient, { RemoteGameClient } from "../game_client";
+//import LocalGameClient, { RemoteGameClient } from "../game_client";
+import client from "../client_instance";
+
 //import { GAME_CREATE_RESPONSE } from "../../MessageLists/game_signaling";
 
 //const urlParams = new URLSearchParams(window.location.search);
@@ -56,32 +58,33 @@ import LocalGameClient, { RemoteGameClient } from "../game_client";
 	
 }*/
 
-export default function App() {
-  const clientRef = useRef(
-    new LocalGameClient("ws://localhost:5050", ["soap"])
-  );
-  const client = clientRef.current;
-  const [tab, setTab] = React.useState(<Connecting client={client} />);
-  // client.serverConnected.subscribe(() => {
-  //   setTab(<Landing client={client} />);
-  // });
-  React.useEffect(() => {
-    client.serverConnected.subscribe(() => {
-      setTab(<Landing client={client} />);
-    });
-    client.serverDisconnected.subscribe(() => {
-      setTab(<Connecting client={client} />);
-    });
-    client.gameJoined.subscribe(() => {
-      setTab(<Lobby client={client} />);
-      //setTab(<Game client={client} />);
-    });
-    client.gameLeft.subscribe(() => {
-      setTab(<Landing client={client} />);
-    });
-  }, []);
-  
-  //<DrawPad />
-  return <div id="app">{tab}</div>;
 
+
+
+const Tabs = {
+	
+	Connecting,
+	Landing,
+	Lobby,
+	Game
+	
+};
+
+export default function App() {
+	
+	const [tab, setTab] = React.useState<keyof typeof Tabs>("Connecting");
+	const Tab = Tabs[tab];
+	
+	React.useEffect(() => (
+		
+		client.serverConnected.subscribe(() => setTab("Landing"),
+		client.serverDisconnected.subscribe(() => setTab("Connecting"),
+		client.gameJoined.subscribe(() => setTab("Lobby"),
+		client.gameStarted.subscribe(() => setTab("Game"),
+		client.gameLeft.subscribe(() => setTab("Landing"))))))
+		
+	), []);
+	
+	return <div id="app"><Tab /></div>;
+	
 }

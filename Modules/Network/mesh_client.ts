@@ -301,7 +301,7 @@ export class RemoteMeshClient extends RemotePeer {
 		
 		channel.onmessage = async (ev: MessageEvent) => {
 			
-			console.log("Message! ", ev.data);
+			//console.log("Message! ", ev.data);
 			
 			if (ev.data instanceof Blob) {
 				this.handleRaw(new Uint8Array(await ev.data.arrayBuffer()));

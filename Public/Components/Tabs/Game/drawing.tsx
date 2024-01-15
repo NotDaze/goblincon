@@ -1,18 +1,20 @@
 
 
 import React from "react";
+import client from "../../../client_instance";
+
 import DrawPad from "../../draw_pad";
 
-import LocalGameClient, { RemoteGameClient } from '../../../game_client';
+import { RemoteGameClient } from '../../../game_client';
 
 
-function GameInfo({ client }: { client: LocalGameClient }) {
+function GameInfo({ onDoneClicked }: { onDoneClicked: () => void }) {
 	
 	
 	return (
 		
 		<div id="info">
-			
+			<button id="done-btn" onClick={onDoneClicked}>Done!</button>
 		</div>
 		
 	);
@@ -21,42 +23,40 @@ function GameInfo({ client }: { client: LocalGameClient }) {
 
 function PlayerName({ player }: { player: RemoteGameClient }) {
 	
-	const [finished, setFinished] = React.useState(false);
+	const [done, setDone] = React.useState(false);
 	
-	React.useEffect(() => player.drawingFinished.subscribe(() => {
-		setFinished(true);
-	}));
+	React.useEffect(() => player.doneDrawing.subscribe(() => {
+		setDone(true);
+	}), []);
 	
 	return (
-		<div>
-			{player.getName()} {finished && <span>✅</span>}
+		<div className="player">
+			{player.presence.getName()} {done && <span>✅</span>}
 		</div>
 	);
 	
 }
 
-function PlayerList({ client }: { client: LocalGameClient }) {
-	
-	
+function PlayerList() {
 	
 	return (
 		<div id="player-list">
-			{Array.from(client.getPeers()).map(peer => <PlayerName player={peer} />)}
+			{Array.from(client.getPeers()).map(peer => <PlayerName key={peer.getID()} player={peer} />)}
 		</div>
 	);
 	
 }
 
 
-export default function Drawing({ client }: { client: LocalGameClient }) {
+export default function Drawing() {
 	
-	const [tab, setTab] = React.useState();
+	const onDoneClicked = () => client.handleDoneDrawing();
 	
 	return (
 		<div id="drawing" className="tab" >
-			<GameInfo client={client} />
+			<GameInfo onDoneClicked={onDoneClicked} />
 			<DrawPad />
-			<PlayerList client={client} />
+			<PlayerList />
 		</div>
 	);
 	
