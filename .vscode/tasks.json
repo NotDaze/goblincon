@@ -7,7 +7,7 @@
 			"label": "build",
 			"type": "shell",
 			//"command": "rd /s /q dist & md dist & Xcopy /exclude:notypescript.txt /q /I /S \"./Public\" \"./dist/Public\" & tsc & node ./dist/app",
-			"command": "npm run main",
+			"command": "npm run main-dev",
 			"group": {
 				"kind": "build",
 				"isDefault": true
