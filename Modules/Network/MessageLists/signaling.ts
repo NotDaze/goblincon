@@ -32,7 +32,7 @@ export const MESH_STABILIZED = new Message(Arg.NONE);
 export const MESH_SESSION_DESCRIPTION_CREATED = new Message({
 	peerID: Arg.UINT2,
 	type: Arg.choice<RTCSdpType>("offer", "answer"),
-	sdp: Arg.STR2
+	sdp: Arg.optional(Arg.STR2)
 });
 export const MESH_ICE_CANDIDATE_CREATED = new Message({
 	peerID: Arg.UINT2,
@@ -40,12 +40,10 @@ export const MESH_ICE_CANDIDATE_CREATED = new Message({
 	//index: Arg.UINT2,
 	//name: Arg.STRING2
 	candidate: Arg.STR2,
-	sdpMid: Arg.STR2,
-	sdpMLineIndex: Arg.UINT2,
-	usernameFragment: Arg.STR2
+	sdpMid: Arg.branch(Arg.STR2, Arg.const(null)),
+	sdpMLineIndex: Arg.branch(Arg.UINT2, Arg.const(null)),
+	usernameFragment: Arg.branch(Arg.STR2, Arg.const(null))
 });
-
-
 
 export const MESH_STATUS_UPDATE = new Message(Arg.NONE);
 /*export const MESH_CLIENT_STATUS_UPDATE = new Message([{
