@@ -98,6 +98,10 @@ const DrawCanvas = ({ canvasRef, startDraw, endDraw, draw }: {
 
 export default function DrawPad() {
 	
+	//const [enabled, setEnabled] = React.useState(true);
+	
+	let enabled = true;
+	
 	const canvasElementRef = React.useRef<HTMLCanvasElement>(null);
 	
 	let canvas: Canvas | undefined;
@@ -109,7 +113,7 @@ export default function DrawPad() {
 	
 	const draw = (ev: React.MouseEvent) => {
 		
-		if (!drawing || !canvas)
+		if (!enabled || !drawing || !canvas)
 			return;
 		
 		canvas.line(
@@ -147,6 +151,8 @@ export default function DrawPad() {
 			throw new Error("Couldn't get canvas context.");
 		
 		canvas = new Canvas(ctx);
+		
+		canvas.wipeStyle("white");
 		canvas.setStrokeStyle("black");
 		canvas.setLineWidth(8);
 		canvas.setLineCap("round");
@@ -158,8 +164,9 @@ export default function DrawPad() {
 			throw new Error("Couldn't get canvas data");
 		
 		client.handleDrawingData(canvasElementRef.current.toDataURL("image/jpeg"));
+		enabled = false; // Don't want to rerender here, will reset the canvas
 		
-	}), [canvasElementRef.current]);
+	}));
 	
 	return (
 		<div id="drawpad">

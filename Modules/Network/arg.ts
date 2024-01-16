@@ -436,6 +436,15 @@ export default class Arg<T> {
 	static arrayLong<T>(arg: ArgLike<T>): ArrayArg<T> {
 		return new ArrayArg<T>(arg, ArgLength.VAR2);
 	}
+	static map<KeyT extends keyof any, ValueT>(keyArg: ArgLike<KeyT>, valueArg: ArgLike<ValueT>): MapArg<KeyT, ValueT> {
+		return Arg.mapLong(keyArg, valueArg);
+	}
+	static mapShort<KeyT extends keyof any, ValueT>(keyArg: ArgLike<KeyT>, valueArg: ArgLike<ValueT>): MapArg<KeyT, ValueT> {
+		return new MapArg(keyArg, valueArg, ArgLength.VAR1);
+	}
+	static mapLong<KeyT extends keyof any, ValueT>(keyArg: ArgLike<KeyT>, valueArg: ArgLike<ValueT>): MapArg<KeyT, ValueT> {
+		return new MapArg(keyArg, valueArg, ArgLength.VAR2);
+	}
 	
 	
 	static branch<T>(...paths : Array<ArgLike<T>>): BranchArg<T> {
@@ -694,16 +703,16 @@ class ArrayArg<T> extends Arg<Array<T>> {
 	}
 	
 }
-class DictArg<Key extends keyof any, Value> extends Arg<Record<Key, Value>> {
+class MapArg<Key, Value> extends Arg<Map<Key, Value>> {
 	
-	private keyArg: Arg<Key>;
-	private valueArg: Arg<Value>;
+	private keyArg: ArgLike<Key>;
+	private valueArg: ArgLike<Value>;
 	
 	//fixed() {
 	//	
 	//}
 	
-	constructor(keyArg: Arg<Key>, valueArg: Arg<Value>, length = ArgLength.VAR2) {
+	constructor(keyArg: ArgLike<Key>, valueArg: ArgLike<Value>, length = ArgLength.VAR2) {
 		
 		super(length);
 		
@@ -716,16 +725,23 @@ class DictArg<Key extends keyof any, Value> extends Arg<Record<Key, Value>> {
 		
 		if (obj instanceof Map)
 			return Arg.matchesAll(this.keyArg, obj.keys()) && Arg.matchesAll(this.valueArg, obj.values());
-		else if (typeof obj == "object" && Object.getPrototypeOf(obj) === Object.prototype)
-			return Arg.matchesAll(this.keyArg, Object.keys(obj)) && Arg.matchesAll(this.valueArg, Object.values(obj));
+		//else if (typeof obj == "object" && Object.getPrototypeOf(obj) === Object.prototype)
+		//	return Arg.matchesAll(this.keyArg, Object.keys(obj)) && Arg.matchesAll(this.valueArg, Object.values(obj));
 		else
 			return false;
 		
 	}
 	
-	public streamEncode(obj: Map<any, any> | DynamicObject, stream : ByteOStream): void {
+	public streamEncode(map: Map<Key, Value>, stream: ByteOStream): void {
 		
-		if (obj instanceof Map) {
+		stream.write(Arg.createHeader(this.length, map.size));
+		
+		for (const [key, value] of map.entries()) {
+			Arg.streamEncode(this.keyArg, key, stream);
+			Arg.streamEncode(this.valueArg, value, stream);
+		}
+		
+		/*if (obj instanceof Map) {
 			
 			stream.write(Arg.createHeader(this.length, obj.size));
 			
@@ -746,21 +762,20 @@ class DictArg<Key extends keyof any, Value> extends Arg<Record<Key, Value>> {
 				Arg.streamEncode(this.valueArg, obj[key], stream);
 			}
 			
-		}
+		}*/
 		
 	}
-	public streamDecode(stream: ByteIStream): Record<Key, Value> {
+	public streamDecode(stream: ByteIStream): Map<Key, Value> {
 		
 		let valueCount = Arg.resolveHeader(stream, this.length);
-		//let decoded: Record<
-		let decoded: Record<Key, Value> = {} as Record<Key, Value>;
+		let decoded = new Map<Key, Value>();
 		
 		for (let i = 0; i < valueCount; i++) {
 			
-			let key = Arg.streamDecode(this.keyArg, stream);
-			let value = Arg.streamDecode(this.valueArg, stream);
-			
-			decoded[key] = value;
+			decoded.set(
+				Arg.streamDecode(this.keyArg, stream),
+				Arg.streamDecode(this.valueArg, stream)
+			);
 			
 		}
 		
@@ -942,8 +957,12 @@ Arg.test({
 //console.log(Arg.encode(arg, 1));
 
 
+/*let testMap = new Map();
+testMap.set(0, 3);
+testMap.set(4, 6);
+testMap.set(7, 0);
 
-
+Arg.test(Arg.map(Arg.INT1, Arg.INT1), testMap);*/
 
 
 

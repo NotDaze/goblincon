@@ -10,6 +10,7 @@ export const GAME_JOIN = new Message({
 	name: Arg.STR1,
 	code: Arg.STR1
 });
+export const GAME_JOIN_FAILED = new Message();
 export const GAME_JOINED = new Message(Arg.optional({
 	id: Arg.INT2,
 	name: Arg.STR1,
@@ -47,6 +48,7 @@ const MESSAGES: Array<Message<any>> = [
 	GAME_CREATE,
 	GAME_JOIN,
 	GAME_JOINED,
+	GAME_JOIN_FAILED,
 	
 	GAME_LOBBY_PLAYERS_JOINED,
 	GAME_LOBBY_PLAYERS_LEFT,

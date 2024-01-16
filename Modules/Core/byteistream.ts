@@ -26,7 +26,8 @@ export default class ByteIStream {
 		let end = (this.index += count); // Store this so that outside changes can't screw anything up
 		
 		if (end > this.bytes.length) {
-			console.error("ByteIStream length exceeded.");
+			//console.error("ByteIStream length exceeded.");
+			throw new Error("ByteIStream length exceeded.");
 			end = this.bytes.length;
 		}
 		

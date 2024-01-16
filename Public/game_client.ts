@@ -18,6 +18,7 @@ import Signal from "../Modules/Core/signal"
 import LocalMeshClient, { RemoteMeshClient } from "../Modules/Network/mesh_client"
 //import Arg from "../Modules/Network/arg"
 import State from "../Modules/Core/state"
+import { Message, Packet } from "../Modules/Network/network"
 
 import GameSignalingMessages, {
 	GAME_CREATE,
@@ -34,22 +35,24 @@ import GameMessages, {
 	ROUND_START,
 	
 	DRAWING_START,
-	DRAWING_END,
+	DRAWING_TIMEOUT,
+	//DRAWING_END,
 	DONE_DRAWING,
 	
 	LOADING_CHUNK,
 	DONE_LOADING,
 	
 	VOTING_START,
-	VOTING_END,
+	//VOTING_END,
+	VOTING_CHOICE,
 	DONE_VOTING,
+	
+	SCORING_START
 	
 	//VOTING_RESULTS,
 } from "../MessageLists/game"
 
-import SortedArray from "../Modules/Core/sorted_array";
-import Canvas from "../Modules/Client/Rendering/canvas"
-import { Message, Packet } from "../Modules/Network/network"
+import CreatureNames from "./creature_names"
 
 //const TEST = MessageRoot.newMessage(Arg.STRING2);
 
@@ -59,11 +62,32 @@ import { Message, Packet } from "../Modules/Network/network"
 // Clients connect to server
 // 
 
+export enum GameState {
+	
+	NONE,
+	LOBBY,
+	
+	DRAWING,
+	VOTING,
+	SCORING,
+	
+}
+
+export enum PlayerState {
+	
+	IDLE,
+	LOADING,
+	DRAWING,
+	VOTING
+	
+}
+
 class PlayerPresence {
 	
 	
 	private name = "<PlayerName>";
 	private drawings = new Array<string>(); // round number -> data url
+	private votes = new Array<number>();
 	
 	getName(): string {
 		return this.name;
@@ -72,24 +96,32 @@ class PlayerPresence {
 		this.name = name;
 	}
 	
-	
+	hasDrawing(round: number): boolean {
+		return this.drawings[round] !== undefined;
+	}
 	getDrawing(round: number): string | undefined {
 		return this.drawings[round];
 	}
-	setDrawing(round: number, drawingData: string): void {
-		this.drawings[round] = drawingData;
-	}
-	addDrawingChunk(round: number, chunk: string): void {
-		
-		if (this.drawings[round] === undefined)
-			this.drawings[round] = chunk;
-		else
-			this.drawings[round] += chunk;
-		
+	setDrawing(round: number, data: string): void {
+		this.drawings[round] = data;
 	}
 	
+	hasVote(round: number): boolean {
+		return this.votes[round] !== undefined;
+	}
+	getVote(round: number): number | undefined {
+		return this.votes[round];
+	}
+	setVote(round: number, id: number): void {
+		this.votes[round] = id;
+	}
 	
-	
+	/*getCompletedDrawingCount(): number {
+		return this.drawings.length - 1;
+	}
+	hasCompletedDrawing(round: number): boolean {
+		return round <= this.getCompletedDrawingCount();
+	}*/
 	
 }
 
@@ -107,6 +139,9 @@ export class RemoteGameClient extends RemoteMeshClient {
 	//private name = "";
 	//private drawings = new Map<number, Canvas>();
 	
+	private currentDrawingRound = 0;
+	private currentDrawing: Array<string> = [];
+	
 	constructor() {
 		
 		super();
@@ -121,21 +156,36 @@ export class RemoteGameClient extends RemoteMeshClient {
 		return this.id === 0;
 	}
 	
-	handleDrawingDataChunk(round: number, chunk: string, done: boolean) {
+	handleDrawingDataChunk(round: number, index: number, count: number, chunk: string) {
 		
-		if (!this.playerState.is(PlayerState.LOADING)) {
-			console.error("Received drawing data chunk for client in invalid state.");
+		if (round !== this.currentDrawingRound) {
+			console.error("Received drawing data chunk for drawing from an invalid round.");
+			return;
+		}
+		if (!this.playerState.any(PlayerState.DRAWING, PlayerState.LOADING, PlayerState.IDLE)) {
+			console.error("Received drawing data chunk from client in invalid state.");
 			return;
 		}
 		
-		console.log("Receiving chunk! " + chunk.length + " | " + done);
+		console.log(`Receiving chunk! ${index+1}/${count} (${chunk.length})`);
+		this.currentDrawing[index] = chunk;
 		
-		this.presence.addDrawingChunk(round, chunk);
-		
-		if (done) {
-			this.playerState.set(PlayerState.IDLE);
-			console.log(this.presence.getDrawing(round));
+		for (let i = 0; i < count; i++) {
+			if (this.currentDrawing[i] === undefined)
+				return;
 		}
+		
+		// Done with drawing
+		let stitched = this.currentDrawing[0];
+		
+		for (let i = 1; i < count; i++)
+			stitched += this.currentDrawing[i];
+		
+		this.presence.setDrawing(round, stitched);
+		
+		this.currentDrawing = [];
+		this.currentDrawingRound++;
+		
 		
 	}
 	
@@ -148,24 +198,7 @@ export class RemoteGameClient extends RemoteMeshClient {
 	
 }
 
-export enum GameState {
-	
-	NONE,
-	LOBBY,
-	
-	DRAWING,
-	VOTING
-	
-}
 
-export enum PlayerState {
-	
-	IDLE,
-	LOADING,
-	DRAWING,
-	VOTING,
-	
-}
 
 
 
@@ -179,7 +212,10 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	//gameJoined = new Signal<void>();
 	//gameLeft = new Signal<void>();
 	
-	
+	static DRAWING_TIME = 60e3;
+	static LOADING_TIME = 5e3;
+	static VOTING_TIME = 10e3;
+	static SCORING_TIME = 5e3;
 	
 	gameState = new State(GameState.NONE);
 	playerState = new State(PlayerState.IDLE);
@@ -190,9 +226,10 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	gameStarted = this.gameState.transition(GameState.LOBBY, GameState.DRAWING); // Will probably need to change
 	
 	drawingStarted = this.gameState.transitionTo(GameState.DRAWING);
-	drawingEnded = this.gameState.transitionFrom(GameState.DRAWING);
+	//drawingEnded = this.gameState.transitionFrom(GameState.DRAWING);
 	votingStarted = this.gameState.transitionTo(GameState.VOTING);
-	votingEnded = this.gameState.transitionFrom(GameState.VOTING);
+	//votingEnded = this.gameState.transitionFrom(GameState.VOTING);
+	scoringStarted = this.gameState.transitionTo(GameState.SCORING);
 	
 	doneDrawing = this.playerState.transitionFrom(PlayerState.DRAWING);
 	doneVoting = this.playerState.transitionFrom(PlayerState.VOTING);
@@ -218,8 +255,9 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	private code = "";
 	private round = 0;
 	
-	// Host only
-	private loadedPeers = new Set<RemoteGameClient>();
+	private creatureNames = new Array<string>();
+	
+	private phaseTimerTimeout?: NodeJS.Timeout;
 	
 	constructor(serverUrl: string, protocols: Array<string> = []) {
 		
@@ -229,41 +267,9 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 		this.initServerMessages();
 		this.initClientMessages();
-		
-		this.connected.connect(() => {
-			if (this.isHost() && this.gameState.is(GameState.LOBBY))
-				this.gameState.set(GameState.DRAWING);
-		});
-		
-		this.drawingStarted.connect(() => {
-			
-			this.playerState.set(PlayerState.DRAWING);
-			
-			for (const peer of this.peers)
-				peer.playerState.set(PlayerState.DRAWING);
-			
-			if (this.isHost())
-				this.sendAll(DRAWING_START);
-			
-		});
-		this.drawingEnded.connect(() => {
-			
-			//if (this.isHost())
-			//	this.sendAll(DRAWING_END);
-			
-		});
-		this.votingStarted.connect(() => {
-			
-			this.playerState.set(PlayerState.VOTING);
-			
-			for (const peer of this.peers)
-				peer.playerState.set(PlayerState.VOTING);
-			
-			if (this.isHost())
-				this.sendAll(VOTING_START);
-			
-		});
-		
+		this.initNonHostMessages();
+		this.initHostMessages();
+		this.initSignals();
 		
 	}
 	private initServerMessages() {
@@ -334,80 +340,11 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	}
 	private initClientMessages() {
 		
-		
-		
 		this.onMessage(LOADING_CHUNK, packet => {
 			
 			//console.log(packet.data.data);
-			packet.peer.handleDrawingDataChunk(this.round, packet.data.data, packet.data.done);
+			packet.peer.handleDrawingDataChunk(this.round, packet.data.index, packet.data.count, packet.data.data);
 			this.checkDoneLoading();
-			
-		});
-		
-		this.addCondition([
-			ROUND_START,
-			DRAWING_START,
-			DRAWING_END,
-			VOTING_START,
-			VOTING_END
-		], packet => {
-			
-			if (!packet.peer.isHost())
-				return "Host message sent by non-host peer.";
-			
-		});
-		
-		this.addCondition([
-			//DONE_DRAWING,
-			DONE_LOADING
-			//DONE_VOTING
-		], packet => {
-			
-			if (!this.isHost())
-				return "Host message sent to non-host peer.";
-			
-		});
-		
-		this.onMessage(ROUND_START, packet => {
-			console.log(`Round Started: ${packet.data}`);
-			this.round = packet.data;
-		});
-		this.onMessage(DRAWING_START, packet => {
-			this.gameState.set(GameState.DRAWING);
-		});
-		this.onMessage(DRAWING_END, packet => {
-			//this.gameState.set(GameState.LOADING);
-			
-		});
-		this.onMessage(VOTING_START, packet => {
-			this.gameState.set(GameState.VOTING);
-		});
-		this.onMessage(VOTING_END, packet => {
-			
-		});
-		
-		this.onMessage(DONE_LOADING, packet => {
-			
-			if (!this.gameState.any(GameState.DRAWING))
-				return;
-			//if (!packet.peer.playerState.is(PlayerState.LOADING))
-			//	return;
-			
-			//packet.peer.playerState.set(PlayerState.IDLE);
-			this.loadedPeers.add(packet.peer);
-			//this.checkDoneLoading();
-			
-			if (this.isHost())
-				this.checkAllDoneLoading();
-			
-		});
-		this.doneLoading.connect(() => {
-			
-			console.log("Done loading");
-			this.sendHost(DONE_LOADING);
-			
-			if (this.isHost())
-				this.checkAllDoneLoading();
 			
 		});
 		
@@ -420,22 +357,196 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 			packet.peer.playerState.set(PlayerState.LOADING);
 			
 		});
+		this.onMessage(DONE_LOADING, packet => {
+			
+			if (!packet.peer.playerState.is(PlayerState.LOADING))
+				return;
+			
+			packet.peer.playerState.set(PlayerState.IDLE);
+			
+			if (this.isHost())
+				this.checkAllDoneLoading();
+			
+		});
 		this.onMessage(DONE_VOTING, packet => {
+			
+			if (!packet.peer.playerState.is(PlayerState.VOTING))
+				return;
+			
+			packet.peer.playerState.set(PlayerState.IDLE);
 			
 		});
 		
-		this.doneDrawing.connect(() => {
-			console.log("Done drawing");
-			this.sendAll(DONE_DRAWING);
-			this.checkDoneLoading();
-		});
-		this.doneVoting.connect(() => {
-			this.sendAll(DONE_VOTING);
-		});
+		
+		
 		
 		
 		
 	}
+	private initNonHostMessages() {
+		
+		this.addCondition([
+			ROUND_START,
+			DRAWING_START,
+			VOTING_START,
+			SCORING_START
+		], (packet: Packet<RemoteGameClient, any>) => {
+			
+			if (!packet.peer.isHost())
+				return "Host message sent by non-host peer.";
+			
+		});
+		
+		this.onMessage(ROUND_START, packet => {
+			console.log(`Round Started: ${packet.data}`);
+			this.round = packet.data;
+		});
+		this.onMessage(DRAWING_START, packet => {
+			this.setCreatureName(this.round, packet.data);
+			this.gameState.set(GameState.DRAWING);
+		});
+		this.onMessage(DRAWING_TIMEOUT, packet => {
+			this.playerState.set(PlayerState.LOADING);
+		});
+		this.onMessage(VOTING_START, packet => {
+			this.gameState.set(GameState.VOTING);
+		});
+		this.onMessage(SCORING_START, packet => {
+			
+			//console.log(packet.data);
+			
+			for (const [peer, vote] of packet.data)
+				this.getPeer(peer)?.presence.setVote(this.round, vote);
+			
+			this.gameState.set(GameState.SCORING);
+			
+		});
+		
+	}
+	private initHostMessages() {
+		
+		this.addCondition([
+			//DONE_DRAWING,
+			//DONE_LOADING,
+			//DONE_VOTING,
+			VOTING_CHOICE,
+		], packet => {
+			
+			if (!this.isHost())
+				return "Host message sent to non-host peer.";
+			
+		});
+		
+		this.onMessage(VOTING_CHOICE, packet => {
+			
+			//if (!packet.peer.)
+			
+			console.log(`${packet.peer.getID()} voted for ${packet.data}`);
+			packet.peer.presence.setVote(this.round, packet.data);
+			
+			this.checkAllDoneVoting();
+			
+		});
+		
+	}
+	private initSignals() {
+		
+		this.connected.connect(() => {
+			if (this.isHost() && this.gameState.is(GameState.LOBBY))
+				this.gameState.set(GameState.DRAWING);
+		});
+		
+		this.drawingStarted.connect(() => {
+			
+			this.setAllPlayerStates(PlayerState.DRAWING);
+			
+			if (this.isHost()) {
+				
+				let creatureName = this.pickCreatureName();
+				this.setCreatureName(this.round, creatureName);
+				this.sendAll(DRAWING_START, creatureName);
+				
+				this.setPhaseTimer(LocalGameClient.DRAWING_TIME, () => {
+					// should consider stopping people from submitting after this
+					this.sendAll(DRAWING_TIMEOUT);
+					this.playerState.set(PlayerState.LOADING);
+					
+					this.setPhaseTimer(LocalGameClient.LOADING_TIME, () => {
+						this.gameState.set(GameState.VOTING);
+					});
+					
+				});
+				
+			}
+			
+		});
+		this.votingStarted.connect(() => {
+			
+			this.setAllPlayerStates(PlayerState.VOTING);
+			
+			if (this.isHost()) {
+				this.sendAll(VOTING_START);
+				
+				this.setPhaseTimer(
+					LocalGameClient.VOTING_TIME,
+					() => this.gameState.set(GameState.SCORING)
+				);
+				
+			}
+			
+		});
+		this.scoringStarted.connect(() => {
+			
+			this.setAllPlayerStates(PlayerState.IDLE);
+			
+			if (this.isHost()) {
+				
+				this.clearPhaseTimer();
+				this.sendAll(SCORING_START, this.getVoteResults());
+				
+				this.setPhaseTimer(
+					LocalGameClient.SCORING_TIME,
+					() => {
+						this.sendAll(ROUND_START, ++this.round);
+						this.gameState.set(GameState.DRAWING);
+					}
+				);
+				
+			}
+			
+		});
+		
+		this.doneDrawing.connect(() => {
+			
+			console.log("Done drawing");
+			this.sendAll(DONE_DRAWING);
+			
+			 // May have already received all drawing data
+			this.checkDoneLoading();
+			
+		});
+		this.doneLoading.connect(() => {
+			
+			console.log("Done loading");
+			this.sendAll(DONE_LOADING);
+			
+			if (this.isHost())
+				this.checkAllDoneLoading();
+			
+		});
+		this.doneVoting.connect(() => {
+			
+			console.log("Done voting");
+			this.sendAll(DONE_VOTING);
+			
+			if (this.isHost())
+				this.checkAllDoneVoting();
+			
+		});
+		
+		
+	}
+	
 	
 	isHost(): boolean {
 		return this.id === 0;
@@ -451,7 +562,62 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 			this.send(host, message, data);
 		
 	}
+	private sendAllExceptHost<T>(message: Message<T>, data?: T): void {
+		
+		let host = this.getHost();
+		
+		if (host === undefined)
+			this.sendAll(message, data);
+		else
+			this.sendAllExcept(host, message, data);
+		
+	}
 	
+	
+	
+	
+	/*getGameName(): string {
+		return this.presence.name;
+	}*/
+	getRound(): number {
+		return this.round;
+	}
+	getGameCode(): string {
+		return this.code;
+	}
+	/**getPresences(): Iterable<PlayerPresence> {
+		
+		yield this.presence;
+		
+		for (const peer of this.getPeers())
+			yield peer.presence;
+		
+	}*/
+	*getPresences(): Iterable<[id: number, presence: PlayerPresence]> {
+		
+		yield [this.getID(), this.presence];
+		
+		for (const peer of this.peers)
+			yield [peer.getID(), peer.presence];
+		
+	}
+	getPresence(id: number): PlayerPresence | undefined {
+		
+		if (id === this.id)
+			return this.presence;
+		
+		return this.getPeer(id)?.presence;
+		
+	}
+	
+	setAllPlayerStates(newState: PlayerState): void {
+		
+		this.playerState.set(newState);
+		
+		for (const peer of this.getPeers())
+			peer.playerState.set(newState);
+		
+	}
 	allPeersIdle(): boolean {
 		
 		//if (!this.playerState.is(PlayerState.IDLE))
@@ -465,14 +631,24 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 	}
 	
-	/*getGameName(): string {
-		return this.presence.name;
-	}*/
-	getRound(): number {
-		return this.round;
+	hasAllDrawings(): boolean {
+		
+		for (const peer of this.getPeers())
+			if (!peer.presence.hasDrawing(this.round))
+				return false;
+		
+		return true;
+		
 	}
-	getGameCode(): string {
-		return this.code;
+	
+	pickCreatureName(): string {
+		return CreatureNames[Math.floor(Math.random() * CreatureNames.length)];
+	}
+	setCreatureName(round: number, name: string): void {
+		this.creatureNames[round] = name;
+	}
+	getCreatureName(round = this.round): string {
+		return this.creatureNames[round] === undefined ? "Jeremy" : this.creatureNames[round];
 	}
 	
 	private handleJoined(id: number, name: string, code: string): void {
@@ -499,10 +675,10 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 	}
 	
-	createGame(name: string): void {
+	requestCreate(name: string): void {
 		this.sendServer(GAME_CREATE, { name });
 	}
-	joinGame(name: string, code: string): void {
+	requestJoin(name: string, code: string): void {
 		this.sendServer(GAME_JOIN, { name, code: code.toUpperCase() });
 	}
 	
@@ -516,10 +692,20 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 	}
 	
+	setPhaseTimer(ms: number, callback: () => void): void {
+		
+		this.clearPhaseTimer();
+		this.phaseTimerTimeout = setTimeout(callback, ms);
+		
+	}
+	clearPhaseTimer(): void {
+		clearInterval(this.phaseTimerTimeout);
+	}
+	
 	checkDoneLoading(): void {
 		
 		if (this.gameState.is(GameState.DRAWING) && this.playerState.is(PlayerState.LOADING))
-			if (this.allPeersIdle())
+			if (this.hasAllDrawings())
 				this.playerState.set(PlayerState.IDLE);
 		
 	}
@@ -531,11 +717,27 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		if (!this.gameState.is(GameState.DRAWING) || !this.playerState.is(PlayerState.IDLE))
 			return;
 		
-		if (this.loadedPeers.size >= this.getPeerCount()) {
-			this.loadedPeers.clear();
-			this.gameState.set(GameState.VOTING);
+		if (this.allPeersIdle()) {
+			this.gameState.set(GameState.VOTING)
 			console.log("All done loading");
 		}
+		
+	}
+	checkAllDoneVoting(): void {
+		
+		if (!this.isHost())
+			return;
+		
+		if (!this.gameState.is(GameState.VOTING))
+			return;
+		
+		for (const [,presence] of this.getPresences())
+			if (!presence.hasVote(this.round))
+				return;
+		
+		// Has all votes
+		this.gameState.set(GameState.SCORING);
+		console.log("All done voting");
 		
 	}
 	
@@ -561,9 +763,24 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		this.presence.setDrawing(this.round, encoded);
 		
 		const MAX_CHUNK_SIZE = 16000;
-		let next = 0;
+		const CHUNK_COUNT = Math.ceil(encoded.length/MAX_CHUNK_SIZE);
 		
-		while (next < encoded.length) {
+		for (let i = 0; i < CHUNK_COUNT; i++) {
+			
+			let data = encoded.substring(
+				i * MAX_CHUNK_SIZE,
+				(i + 1) * MAX_CHUNK_SIZE
+			); 
+			
+			this.sendAll(LOADING_CHUNK, {
+				data: data,
+				index: i,
+				count: CHUNK_COUNT
+			});
+			
+		}
+		
+		/*while (index < ch) {
 			
 			let chunk_size = Math.min(encoded.length - next, MAX_CHUNK_SIZE);
 			
@@ -572,15 +789,69 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 			this.sendAll(LOADING_CHUNK, {
 				//round: this.roundNumber,
 				data: encoded.substring(next, next += chunk_size),
-				done: (next >= encoded.length)
+				index: (next >= encoded.length)
 			});
 			
-		}
+		}*/
 		
 		
 		
 	}
 	
+	submitVote(player: RemoteGameClient): void {
+		
+		if (!this.playerState.is(PlayerState.VOTING)) {
+			console.error("Player voted while in invalid state.");
+			return;
+		}
+		
+		this.presence.setVote(this.round, player.getID());
+		
+		this.playerState.set(PlayerState.IDLE);
+		this.sendHost(VOTING_CHOICE, player.getID());
+		
+	}
+	
+	getVoteResults(round = this.round): Map<number, number> {
+		
+		let results = new Map<number, number>();
+		
+		for (const [id, presence] of this.getPresences()) {
+			
+			let vote = presence.getVote(round);
+			
+			if (vote === undefined) // May want an error message, but probably not
+				continue;
+			
+			results.set(id, vote);
+			
+		}
+		
+		return results;
+		
+	}
+	getVoteCount(id: number, round = this.round): number {
+		
+		let count = 0;
+		
+		for (const [,presence] of this.getPresences())
+			if (presence.getVote(round) === id)
+				count++;
+		
+		return count;
+		
+	}
+	/*getVoteCounts(round = this.round): Map<number, number> {
+		
+		for (const [id, presence] of this.getPresences()) {
+			
+			if (presence.hasVote(this.round)) {
+			
+			}
+		}
+		
+		
+	}*/
 	
 	/*getPeerNames(): Array<string> {
 		

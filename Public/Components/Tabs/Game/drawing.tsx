@@ -5,16 +5,19 @@ import client from "../../../client_instance";
 
 import DrawPad from "../../draw_pad";
 
-import { RemoteGameClient } from '../../../game_client';
+import LocalGameClient, { RemoteGameClient } from '../../../game_client';
+import { Countdown } from "../../countdown";
 
 
-function GameInfo({ onDoneClicked }: { onDoneClicked: () => void }) {
+function RoundInfo() {
+	
 	
 	
 	return (
 		
-		<div id="info">
-			<button id="done-btn" onClick={onDoneClicked}>Done!</button>
+		<div id="round-info">
+			<div id="creature-name">{client.getCreatureName()}</div>
+			<Countdown time={Date.now() + LocalGameClient.DRAWING_TIME} />
 		</div>
 		
 	);
@@ -30,8 +33,9 @@ function PlayerName({ player }: { player: RemoteGameClient }) {
 	}), []);
 	
 	return (
-		<div className="player">
-			{player.presence.getName()} {done && <span>✅</span>}
+		<div className="player box-item">
+			<span>{player.presence.getName()}</span>
+			{done && <span>✅</span>}
 		</div>
 	);
 	
@@ -40,23 +44,51 @@ function PlayerName({ player }: { player: RemoteGameClient }) {
 function PlayerList() {
 	
 	return (
-		<div id="player-list">
+		<div id="player-list" className="box-ctr">
 			{Array.from(client.getPeers()).map(peer => <PlayerName key={peer.getID()} player={peer} />)}
 		</div>
 	);
 	
 }
 
+/*function DoneBtn({ onClick }: { onClick: () => void }) {
+	return (
+		
+	);
+}*/
+
+function DoneBtn({ onClick }: { onClick: () => void }) {
+	
+	const [enabled, setEnabled] = React.useState(true);
+	
+	React.useEffect(() => (
+		client.doneDrawing.subscribe(() => setEnabled(false))
+	), []);
+	
+	return <button id="done-btn" disabled={!enabled} onClick={onClick}>Done!</button>;
+	
+}
 
 export default function Drawing() {
 	
-	const onDoneClicked = () => client.handleDoneDrawing();
+	//const onDoneClicked = () => client.handleDoneDrawing();
+	
+	//<GameInfo onDoneClicked={onDoneClicked} />
+	
+	
 	
 	return (
 		<div id="drawing" className="tab" >
-			<GameInfo onDoneClicked={onDoneClicked} />
-			<DrawPad />
+			
+			<RoundInfo />
+			
+			<div id="drawpad-ctr">
+				<DrawPad />
+				<DoneBtn onClick={() => client.handleDoneDrawing()} />
+			</div>
+			
 			<PlayerList />
+			
 		</div>
 	);
 	

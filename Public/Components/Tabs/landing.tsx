@@ -35,8 +35,8 @@ export default function Landing() {
 		<div id="landing" className="tab">
 			<input id="name-input" defaultValue={name} onChange={ev => setName(ev.target.value)} placeholder="Name"></input>
 			<input id="code-input" defaultValue={code} onChange={ev => setCode(ev.target.value)} placeholder="Code"></input>
-			<button id="join-btn" onClick={ev => client.joinGame(name, code)}>Join</button>
-			<button id="create-btn" onClick={ev => client.createGame(name)}>Create</button>
+			<button id="join-btn" onClick={ev => client.requestJoin(name, code)}>Join</button>
+			<button id="create-btn" onClick={ev => client.requestCreate(name)}>Create</button>
 		</div>
 	);
 	

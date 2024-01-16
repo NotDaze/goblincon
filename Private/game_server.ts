@@ -28,6 +28,7 @@ import GameSignalingMessages, {
 	GAME_CREATE,
 	GAME_JOIN,
 	GAME_JOINED,
+	GAME_JOIN_FAILED,
 	
 	GAME_LOBBY_PLAYERS_JOINED,
 	GAME_LOBBY_PLAYERS_LEFT,
@@ -70,6 +71,8 @@ import GameSignalingMessages, {
 	
 }*/
 
+const MAX_NAME_LENGTH = 16;
+
 export class GameSocket extends SignalingSocket {
 	
 	private name = "";
@@ -78,7 +81,7 @@ export class GameSocket extends SignalingSocket {
 		return this.name;
 	}
 	setName(name: string): void {
-		this.name = name;
+		this.name = name.substring(0, MAX_NAME_LENGTH);
 	}
 	
 	isHost(): boolean {
@@ -119,6 +122,11 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			});*/
 			
 			mesh.peersAdded.connect(peers => {
+				
+				if (!mesh.state.is(ConnectionState.NEW)) {
+					console.log("Player attempted to join lobby after game start.");
+					return;
+				}
 				
 				for (const peer of peers)
 					this.send(peer, GAME_JOINED, { id: peer.getMeshID(), name: peer.getName(), code: this.games.get(mesh) });
@@ -179,8 +187,10 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			GAME_JOIN
 		], packet => {
 			
-			if (this.getPeerMesh(packet.peer) !== undefined)
+			if (this.getPeerMesh(packet.peer) !== undefined) {
+				this.send(packet.peer, GAME_JOIN_FAILED);
 				return "Peer that is in a mesh attempted to create or join another.";
+			}
 			
 		});
 		
@@ -191,10 +201,7 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			let code = this.generateGameCode();
 			
 			this.games.set(mesh, code);
-			
-			packet.peer.setName(packet.data.name);
-			mesh.add(packet.peer);
-			
+			this.lobbyJoin(mesh, packet.peer, packet.data.name);
 			//this.lobbyJoin(mesh, packet.peer, packet.data.name);
 			
 		});
@@ -204,15 +211,14 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			//let code = packet.data.code;
 			let mesh = this.games.reverseGet(packet.data.code);
 			
-			if (mesh === undefined) {
-				// Handle invalid join code somehow
-				//this.send(packet.peer, GAME_JOIN_FAILED);
-				this.send(packet.peer, GAME_JOINED, undefined);
+			if (mesh !== undefined && mesh.state.is(ConnectionState.NEW)) {
+				this.lobbyJoin(mesh, packet.peer, packet.data.name);
 			}
 			else {
-				packet.peer.setName(packet.data.name);
-				mesh.add(packet.peer);
+				this.send(packet.peer, GAME_JOIN_FAILED);
 			}
+			
+			
 			
 			//this.send(packet.peer, GAME_JOIN_RESPONSE);
 			
@@ -241,7 +247,7 @@ export default class GameServer extends SignalingServer<GameSocket> {
 	lobbyLeave(mesh: Mesh<GameSocket>, peer: GameSocket): void {
 		
 		mesh.remove(peer);
-		this.send(peer, GAME_JOINED, undefined);
+		//this.send(peer, GAME_DISCONNECT);
 		
 		const leaveData = [ { id: peer.getMeshID() } ];
 		

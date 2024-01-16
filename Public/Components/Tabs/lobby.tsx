@@ -8,7 +8,7 @@ import client from "../../client_instance";
 function PlayerName({ name }: { name: string }) {
 	
 	return (
-		<div className="player-name">{name}</div>
+		<div className="player box-item">{name}</div>
 	);
 	
 }
@@ -39,7 +39,7 @@ function PlayerList() {
 	}), []);*/
 	
 	return (
-		<div id="player-list">
+		<div id="player-list" className="box-ctr">
 			{ peers.map(peer => <PlayerName key={peer.getID()} name={peer.presence.getName()} />) }
 		</div>
 	);
@@ -66,6 +66,7 @@ export default function Lobby() {
 	return (
 		<div id="lobby" className="tab">
 			<LobbyHeader code={client.getGameCode()} name={client.presence.getName()} />
+			<hr />
 			<PlayerList />
 			
 			<div>
