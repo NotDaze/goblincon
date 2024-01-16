@@ -142,9 +142,9 @@ export class RemoteGameClient extends RemoteMeshClient {
 	private currentDrawingRound = 0;
 	private currentDrawing: Array<string> = [];
 	
-	constructor() {
+	constructor(config?: RTCConfiguration) {
 		
-		super();
+		super(config);
 		
 		/*this.drawingFinished.connect(round => {
 			console.log(this.presence.getDrawing(round));
@@ -259,9 +259,9 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	
 	private phaseTimerTimeout?: NodeJS.Timeout;
 	
-	constructor(serverUrl: string, protocols: Array<string> = []) {
+	constructor(serverUrl: string, protocols: Array<string> = [], rtcConfig = RemoteMeshClient.DEFAULT_CONFIG) {
 		
-		super(RemoteGameClient, serverUrl, protocols);
+		super(RemoteGameClient, serverUrl, protocols, rtcConfig);
 		this.addServerMessages(GameSignalingMessages);
 		this.addMessages(GameMessages);
 		

@@ -60,13 +60,15 @@ export class RemoteMeshClient extends RemotePeer {
 	//answerCreated = new Signal<RTCSessionDescription>();
 	//connectionReady = new Signal<void>();
 	
-	private connection = new RTCPeerConnection({
+	static DEFAULT_CONFIG: RTCConfiguration = {
 		iceServers: [
 			{
 				urls: [ "stun:stun.l.google.com", "stun:stun1.l.google.com" ]
 			}
 		]
-	});
+	};
+	
+	private connection: RTCPeerConnection;
 	private channels = new Map<TransferMode, RTCDataChannel>(); // Overkill
 	
 	/*private channels = {
@@ -76,9 +78,11 @@ export class RemoteMeshClient extends RemotePeer {
 	//private channelUnreliable = );
 	//private a = this.rtcConnection.createDataChannel()
 	
-	constructor() {
+	constructor(config: RTCConfiguration = RemoteMeshClient.DEFAULT_CONFIG) {
 		
 		super();
+		
+		this.connection = new RTCPeerConnection(config);
 		
 		this.channels.set(TransferMode.RELIABLE, this.createDataChannel("reliable", {
 			
@@ -89,7 +93,7 @@ export class RemoteMeshClient extends RemotePeer {
 			//ordered: true,
 			
 		}));
-		this.channels.set(TransferMode.UNRELIABLE, this.createDataChannel("unreliable", {
+		/*this.channels.set(TransferMode.UNRELIABLE, this.createDataChannel("unreliable", {
 			
 			id: 1,
 			negotiated: true,
@@ -97,7 +101,7 @@ export class RemoteMeshClient extends RemotePeer {
 			maxRetransmits: 0,
 			ordered: false,
 			
-		}));
+		}));*/
 		
 		/*this.connection.ondatachannel = (ev: RTCDataChannelEvent) => {
 			
@@ -378,19 +382,17 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	//serverConnecting: Signal<void>;
 	
 	protected socket: SocketClient;
-	private clientClass: { new(): RemoteClientType };
-	
+	private clientClass: { new(config?: RTCConfiguration): RemoteClientType };
+	private clientConfig: RTCConfiguration;
 	
 	protected stable = false;
 	
-	
-	private fullyConnected = false;
-	
-	constructor(remoteClientClass: { new(): RemoteClientType }, serverUrl: string, protocols: Array<string> = []) {
+	constructor(remoteClientClass: { new(config?: RTCConfiguration): RemoteClientType }, serverUrl: string, protocols: Array<string> = [], rtcConfig = RemoteMeshClient.DEFAULT_CONFIG) {
 		
 		super();
 		
 		this.clientClass = remoteClientClass;
+		this.clientConfig = rtcConfig;
 		
 		this.socket = new SocketClient(serverUrl, protocols);
 		this.serverConnected = this.socket.connected;
@@ -631,7 +633,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		if (id === this.id)
 			return;
 		
-		let peer = new this.clientClass();
+		let peer = new this.clientClass(this.clientConfig);
 		this.addPeer(peer, id);
 		return peer;
 		
@@ -712,7 +714,6 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	public sendServer<T>(message: Message<T>, data: T = undefined as T): void {
 		this.socket.send(message, data);
 	}
-	
 	
 }
 
