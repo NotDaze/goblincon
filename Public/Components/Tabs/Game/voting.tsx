@@ -5,7 +5,7 @@ import client from "../../../client_instance";
 import { RemoteGameClient } from "../../../game_client";
 //import LocalGameClient from '../../../game_client';
 
-function VoteBtn({ player }: { player: RemoteGameClient }) {
+function VoteBtn({ playerID }: { playerID: number }) {
 	
 	let [enabled, setEnabled] = React.useState(true);
 	
@@ -19,7 +19,7 @@ function VoteBtn({ player }: { player: RemoteGameClient }) {
 			<button
 				className="vote-btn"
 				disabled={!enabled}
-				onClick={() => client.submitVote(player)}
+				onClick={() => client.submitVote(playerID)}
 			>
 				Vote!
 			</button>
@@ -28,23 +28,54 @@ function VoteBtn({ player }: { player: RemoteGameClient }) {
 	
 }
 
-function PlayerSubmission({ player }: { player: RemoteGameClient }) {
+function PlayerSubmission({ playerID }: { playerID: number }) {
 	
-	const [voteCount, setVoteCount] = React.useState(0);
+	const [voteCount, setVoteCount] = React.useState(-1); // Slightly janky
 	
 	React.useEffect(() => client.scoringStarted.subscribe(() => {
-		setVoteCount(client.getVoteCount(player.getID()));
+		setVoteCount(client.getVoteCount(playerID));
 	}), []);
 	
+	let presence = client.getPresence(playerID);
+	let isClient = (playerID === client.getID())
+	
+	if (!presence) {
+		console.error("<PlayerSubmission /> created for invalid player.");
+		return <div></div>;
+	}
+	
+	let voteCountStr: string;
+	
+	if (voteCount < 0) {
+		voteCountStr = "";
+	}
+	else if (voteCount === 0) {
+		voteCountStr = "0 votes";
+	}
+	else {
+		
+		if (isClient)
+			voteCountStr = `${voteCount} vote${voteCount > 1 && "s"}!`;
+		else
+			voteCountStr = `${voteCount} vote${voteCount > 1 && "s"}`;
+		
+	}
+	
+	/*let voteCountStr = voteCount < 0 ? "" : (
+		voteCount === 0 ? "0 votes" : (
+			`${voteCount} vote${voteCount > 1 ? "s" : ""}${isClient ? "!" : ""}`
+		)
+	);*/
+	
 	return (
-		<div className="submission box-ctr">
-			<img className="image" src={player.presence.getDrawing(client.getRound())}></img>
+		<div className={`submission box-ctr${isClient ? " client" : ""}`}>
+			<img className="image" src={presence.getDrawing(client.getRound())}></img>
 			<div className="footer">
-				<div className="name">{player.presence.getName()}</div>
+				<div className="name">{presence.getName()}</div>
 				<div className="vote-count">
-					{voteCount > 0 ? voteCount : ""}
+					{voteCountStr}
 				</div>
-				<VoteBtn player={player} />
+				{!isClient && <VoteBtn playerID={playerID} />}
 			</div>
 		</div>
 	);
@@ -61,7 +92,8 @@ export default function Voting() {
 	return (
 		<div id="voting" className="tab" >
 			<div id="submissions">
-				{Array.from(client.getPeers()).map(player => <PlayerSubmission key={player.getID()} player={player} />)}
+				<PlayerSubmission key={client.getID()} playerID={client.getID()} />
+				{Array.from(client.getPeerIDs()).map(id => <PlayerSubmission key={id} playerID={id} />)}
 			</div>
 		</div>
 	);

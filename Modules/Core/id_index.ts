@@ -1,11 +1,12 @@
 
 
 import SortedArray from "./sorted_array";
+import TwoWayMap from "./two_way_map";
 
 
 export default class IDIndex<Type> {
 	
-	protected map = new Map<number, Type>();
+	protected map = new TwoWayMap<number, Type>();
 	ids = new Set<number>();
 	values = new Set<Type>();
 	
@@ -23,6 +24,14 @@ export default class IDIndex<Type> {
 	
 	private trim() {
 		
+		/*let trimCount = 0;
+		
+		for (let i = this.freeIDs.length - 1; i >= 0; i--) {
+			
+		}*/
+		
+		// Could be optimized to use splice, but probably not a big deal
+		
 		while(this.highestID >= 0) {
 				
 			// If highest freed id is our highest id, trim and continue
@@ -39,13 +48,8 @@ export default class IDIndex<Type> {
 	}
 	protected freeID(id: number): void {
 		
-		if (id === this.highestID) { // Trim
-			this.highestID--;
-			this.trim();
-		}
-		else {
-			SortedArray.insert(this.freeIDs, id);
-		}
+		SortedArray.insert(this.freeIDs, id);
+		this.trim();
 		
 	}
 	protected reserveID(id: number): void {
@@ -82,16 +86,21 @@ export default class IDIndex<Type> {
 		
 	}
 	
-	has(id: number): boolean {
+	hasID(id: number): boolean {
 		return this.map.has(id);
 	}
-	get(id: number): Type | undefined {
+	getValue(id: number): Type | undefined {
 		return this.map.get(id);
 	}
 	
 	hasValue(value: Type): boolean {
 		return this.values.has(value);
 	}
+	getID(value: Type): number {
+		let id = this.map.reverseGet(value);
+		return id === undefined ? -1 : id;
+	}
+	
 	
 	add(value: Type, id = this.getNextID()): number {
 		

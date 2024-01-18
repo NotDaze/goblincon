@@ -25,18 +25,25 @@ import TwoWayMap from '../Modules/Core/two_way_map';
 import SignalingServer, { SignalingSocket, Mesh } from "../Modules/Network/signaling_server";
 import GameSignalingMessages, {
 	
+	GAME_INIT_ERROR,
+	
 	GAME_CREATE,
 	GAME_JOIN,
 	GAME_JOINED,
-	GAME_JOIN_FAILED,
 	
 	GAME_LOBBY_PLAYERS_JOINED,
 	GAME_LOBBY_PLAYERS_LEFT,
 	
-	GAME_START
-	
+	GAME_START,
 	
 } from "../MessageLists/game_signaling";
+import {
+	MIN_PLAYER_COUNT,
+	MAX_PLAYER_COUNT,
+	MIN_NAME_LENGTH,
+	MAX_NAME_LENGTH,
+	CODE_LENGTH
+} from "../MessageLists/game_signaling"
 
 
 /*export class Game { // We do not actually even need this wrapper, do we
@@ -71,8 +78,6 @@ import GameSignalingMessages, {
 	
 }*/
 
-const MAX_NAME_LENGTH = 16;
-
 export class GameSocket extends SignalingSocket {
 	
 	private name = "";
@@ -81,7 +86,14 @@ export class GameSocket extends SignalingSocket {
 		return this.name;
 	}
 	setName(name: string): void {
-		this.name = name.substring(0, MAX_NAME_LENGTH);
+		
+		name = name.trim();
+		
+		if (name.length < MIN_NAME_LENGTH)
+			this.name = "Player";
+		else
+			this.name = name.substring(0, MAX_NAME_LENGTH);
+		
 	}
 	
 	isHost(): boolean {
@@ -105,21 +117,6 @@ export default class GameServer extends SignalingServer<GameSocket> {
 		this.addMessages(GameSignalingMessages);
 		
 		this.meshCreated.connect((mesh: Mesh<GameSocket>) => {
-			
-			/*let creator: GameSocket | undefined = mesh.getPeer(0);
-			
-			if (creator === undefined)
-				throw new Error("");
-			
-			let code = this.generateGameCode();
-			
-			this.games.set(code, mesh);
-			this.send(creator, GAME_CREATE_RESPONSE, code);*/
-			
-			/*mesh.peersAdded.connect(peers => {
-				
-				
-			});*/
 			
 			mesh.peersAdded.connect(peers => {
 				
@@ -188,7 +185,7 @@ export default class GameServer extends SignalingServer<GameSocket> {
 		], packet => {
 			
 			if (this.getPeerMesh(packet.peer) !== undefined) {
-				this.send(packet.peer, GAME_JOIN_FAILED);
+				this.send(packet.peer, GAME_INIT_ERROR, "Already in a game");
 				return "Peer that is in a mesh attempted to create or join another.";
 			}
 			
@@ -202,7 +199,6 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			
 			this.games.set(mesh, code);
 			this.lobbyJoin(mesh, packet.peer, packet.data.name);
-			//this.lobbyJoin(mesh, packet.peer, packet.data.name);
 			
 		});
 		
@@ -211,16 +207,12 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			//let code = packet.data.code;
 			let mesh = this.games.reverseGet(packet.data.code);
 			
-			if (mesh !== undefined && mesh.state.is(ConnectionState.NEW)) {
+			if (mesh === undefined || !mesh.state.is(ConnectionState.NEW))
+				this.send(packet.peer, GAME_INIT_ERROR, "Invalid join code");
+			else if (mesh.getPeerCount() >= MAX_PLAYER_COUNT)
+				this.send(packet.peer, GAME_INIT_ERROR, "Game full");
+			else
 				this.lobbyJoin(mesh, packet.peer, packet.data.name);
-			}
-			else {
-				this.send(packet.peer, GAME_JOIN_FAILED);
-			}
-			
-			
-			
-			//this.send(packet.peer, GAME_JOIN_RESPONSE);
 			
 		});
 		
@@ -228,9 +220,16 @@ export default class GameServer extends SignalingServer<GameSocket> {
 			
 			let mesh = this.getPeerMesh(packet.peer);
 			
-			if (mesh !== undefined && packet.peer.isHost() && !mesh.isActive()) {
-				mesh.attemptInitialize();
-				mesh.sendAll(GAME_START);
+			if (mesh !== undefined && packet.peer.isHost() && mesh.state.is(ConnectionState.NEW)) {
+				
+				if (mesh.getPeerCount() >= MIN_PLAYER_COUNT) {
+					mesh.attemptInitialize();
+					mesh.sendAll(GAME_START);
+				}
+				/*else {
+					this.send(packet.peer, GAME_INIT_ERROR, "");
+				}*/
+				
 			}
 			
 		});
@@ -256,7 +255,7 @@ export default class GameServer extends SignalingServer<GameSocket> {
 		
 	}
 	
-	generateGameCode(length = 5): string {
+	generateGameCode(length = CODE_LENGTH): string {
 		
 		const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 		let code = "";

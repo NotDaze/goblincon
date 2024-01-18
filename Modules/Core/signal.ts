@@ -129,13 +129,11 @@ export default class Signal<ArgType> extends Set<(arg: ArgType) => any> implemen
 		
 		this.connect(callback);
 		
+		//let ref = new WeakRef(this);
+		
 		return () => {
-			
-			if (chain !== undefined)
-				chain();
-			
+			chain?.();
 			this.disconnect(callback);
-			
 		}
 		
 	}

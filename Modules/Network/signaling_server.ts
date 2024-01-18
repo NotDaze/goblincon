@@ -2,10 +2,11 @@
 
 
 import State from "../Core/state"
-import Signal from "../Core/signal"
+import Signal, { SignalListener } from "../Core/signal"
 
 import { WebSocket } from "ws"
 //import Arg from "./arg"
+
 import {
 	
 	ConnectionState,
@@ -42,99 +43,8 @@ import SignalingMessages, {
 	
 } from "./MessageLists/signaling"
 
-/*const MESSAGE_INDEX = new MessageIndex();
-
-//const STUN = MESSAGE_INDEX.newMessage(Message.RAW);
-const MESH_INITIALIZE = MESSAGE_INDEX.newMessage({
-	localID: Arg.UINT2,
-	peerIDs: Arg.array(Arg.UINT2)
-});
-const MESH_TERMINATE = MESSAGE_INDEX.newMessage();
-const MESH_CONNECT_PEERS = MESSAGE_INDEX.newMessage({
-	peerIDs: Arg.array(Arg.UINT2)
-});
-const MESH_DISCONNECT_PEERS = MESSAGE_INDEX.newMessage({
-	peerIDs: Arg.array(Arg.UINT2)
-});
-const MESH_CONNECTION_STATUS_UPDATE = MESSAGE_INDEX.newMessage({
-	connectedIDs: Arg.array(Arg.UINT2),
-	//disconnectedIDs: Arg.array(Arg.UINT2)
-	//failedIDs: Arg.array(Arg.UINT2),
-});
-//const MESH_CREATION_COMPLETED = MESSAGE_INDEX.newMessage();
-const MESH_STABILIZED = MESSAGE_INDEX.newMessage();
-//const MESH_DESTABILIZED = MESSAGE_INDEX.newMessage();
-
-const MESH_SESSION_DESCRIPTION_CREATED = MESSAGE_INDEX.newMessage({
-	peerID: Arg.UINT2,
-	type: Arg.choice("offer", "answer"),
-	sdp: Arg.STRING2
-});
-const MESH_ICE_CANDIDATE_CREATED = MESSAGE_INDEX.newMessage({
-	peerID: Arg.UINT2,
-	media: Arg.STRING1,
-	index: Arg.UINT2,
-	name: Arg.STRING2
-});*/
-
-
-/*MESSAGE_INDEX.addCondition(// Mesh stability update has room
-	[MESH_STABILIZED, MESH_DESTABILIZED],
-	(packet: Packet): boolean => {
-
-		let room = packet.peer.getRoom() as Mesh;
-
-		if (room == null || room.state.is(ConnectionState.NEW)) {
-			console.error("Invalid mesh stability update");
-			return false;
-		}
-
-		return true;
-
-	}
-);*/
-/*MESSAGE_INDEX.addCondition( // Connection status update //
-	MESH_CONNECTION_STATUS_UPDATE,
-	(packet: Packet): boolean => {
-		
-		let room = packet.peer.getRoom() as Mesh;
-		
-		
-		if (room == null || room.state.is(ConnectionState.NEW)) {
-			console.error("Invalid mesh connection status update");
-			return false;
-		}
-		
-		return true;
-		
-	}
-);
-MESSAGE_INDEX.addCondition( // SDP/ICE forward has room and valid target //
-	[MESH_SESSION_DESCRIPTION_CREATED, MESH_ICE_CANDIDATE_CREATED],
-	(packet: Packet): boolean => {
-		
-		let room = packet.peer.getRoom() as Mesh;
-		
-		if (room == null || room.state.is(ConnectionState.NEW) || !room.hasSocket(packet.data.peerID)) {
-			console.error("Invalid session description/ICE transport request");
-			return false;
-		}
-		
-		return true;
-		
-	}
-);*/
-
-
-/*type StatusUpdate {
-	
-	[key: ConnectionState]: Array<number>,
-	
-}*/
 
 export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> {
-	
-	//public started = new Signal<void>();
 	
 	stabilized = new Signal<void>();
 	destabilized = new Signal<void>();
@@ -145,21 +55,11 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 	
 	protected peerIndex = new RemotePeerIndex<SocketType>();
 	
-	//private nodeIndex = new Map<number, SignalingSocket>();
 	private stable = false;
 	
-	//private startThreshold = 2;
-	
-	protected get ids() {
-		return this.peerIndex.ids;
-	}
-	/*protected get peers() {
-		return this.peerIndex.peers;
-	}*/
-	
-	constructor(localPeer: SignalingServer<SocketType>, stratum: Set<Mesh<SocketType>>) {
+	constructor(stratum: Set<Mesh<SocketType>>, server: SignalingServer<SocketType>) {
 		
-		super(localPeer, stratum);
+		super(stratum, server);
 		
 		this.capacity = 4;
 		
@@ -205,7 +105,7 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 			this.checkStability();
 			
 			if (this.isEmpty() && !this.state.is(ConnectionState.DISCONNECTED))
-				this.kill();
+				this.destroy();
 			
 		});
 		
@@ -222,14 +122,6 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 		});
 		
 	}
-	
-	public hasPeer(meshID: number): boolean {
-		return this.peerIndex.hasPeer(meshID);
-	}
-	public getPeer(meshID: number): SocketType | undefined {
-		return this.peerIndex.getPeer(meshID);
-	}
-	//public getPeerIDs(peers: Iterable<SocketType>): 
 	
 	private calculateStability(): boolean {
 		
@@ -342,24 +234,6 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 			this.initialize();
 	}
 	
-	public kill(): void {
-		
-		if (this.state.is(ConnectionState.DISCONNECTED)) {
-			console.error("Mesh terminated while already disconnected.");
-			return;
-		}
-		else {
-			
-			this.state.set(ConnectionState.DISCONNECTED);
-			//this.remove(...this.getSockets());
-			super.kill();
-			
-			console.log("Mesh terminated.");
-			
-		}
-		
-	}
-	
 	public add(...sockets: Array<SocketType>): Array<SocketType> {
 		
 		if (this.state.is(ConnectionState.DISCONNECTED)) {
@@ -372,6 +246,24 @@ export class Mesh<SocketType extends SignalingSocket> extends Group<SocketType> 
 	}
 	public remove(...sockets: Array<SocketType>): Array<SocketType> {
 		return super.remove(...sockets);
+	}
+	
+	public destroy(): void {
+		
+		if (this.state.is(ConnectionState.DISCONNECTED)) {
+			console.error("Mesh destroyed while already disconnected.");
+			return;
+		}
+		else {
+			
+			this.state.set(ConnectionState.DISCONNECTED);
+			//this.remove(...this.getSockets());
+			super.destroy();
+			
+			console.log("Mesh terminated.");
+			
+		}
+		
 	}
 	
 	private setPairConnectionState(localSocket: SocketType, remoteSocket: SocketType, state: ConnectionState): void {
@@ -518,27 +410,20 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 	meshCreated = new Signal<Mesh<SocketType>>();
 	meshDestroyed = new Signal<Mesh<SocketType>>();
 	
-	//static MESSAGE_INDEX = new MessageIndex();
-	
-	//private matches = new Array<Mesh>();
 	protected meshes = new Set<Mesh<SocketType>>();
 	
 	//private meshClass: { new(...peers: Array<SocketType>): MeshType };
+	private meshListeners = new Map<Mesh<SocketType>, SignalListener>();
 	
 	constructor(socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
 		
-		//let b = SignalingSocket;
-		//let a = new b();
-		
 		super(socketClass, wssArgs);
-		
 		this.addMessages(SignalingMessages);
 		
-		//this.peerConnected.connect((peer: SocketType) => {
-		//	this.findMesh(peer).add(peer);
-		//});
-		
-		
+		this.initMessageHandling();
+	
+	}
+	private initMessageHandling() {
 		this.addCondition( // Has active mesh
 			[
 				MESH_CLIENT_STATUS_UPDATE,
@@ -549,121 +434,76 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 				
 				let mesh = this.getPeerMesh(packet.peer);
 				
-				if (!mesh || !mesh.has(packet.peer) || !mesh.isActive())
+				if (mesh === undefined || !mesh.isActive())
 					return "No active mesh.";
 				
 			}
 		);
-		this.addCondition( // Valid transport request
-			[
-				MESH_SESSION_DESCRIPTION_CREATED,
-				MESH_ICE_CANDIDATE_CREATED
-			],
-			(packet: Packet<SocketType, { peerID: number }>) => {
-				
-				let mesh = this.getPeerMesh(packet.peer);
-				
-				//if (!mesh)
-				//	return "Invalid SDP/ICE peer.";
-				
-				let target = mesh?.getPeer(packet.data.peerID) as SocketType;
-				
-				if (!target)
-					return "Invalid SDP/ICE transport request."
-				// verify that they aren't already connected, maybe
-				
-			}
-		)
-		
-		
 		
 		this.onMessage(MESH_CLIENT_STATUS_UPDATE, packet => {
 			
-			//packet.data
-			
-			let mesh = this.getPeerMesh(packet.peer);
-			mesh?.handleConnectionStatusUpdate(
+			this.getPeerMesh(packet.peer)?.handleConnectionStatusUpdate(
 				packet.peer,
 				packet.data as MultiPeerConnectionStatus<number>
-				/*[
-					packet.data.pendingIDs,
-					packet.data.connectedIDs,
-					packet.data.disconnectedIDs
-				]*/
 			);
 			
 		});
 		
 		
 		this.onMessage(MESH_SESSION_DESCRIPTION_CREATED, packet => {
-			// peerID, type, sdp
 			
-			/*let mesh = this.getPeerMesh(packet.peer);
+			let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID);
 			
-			if (!mesh)
-				return;
-			
-			let target = mesh?.getPeer(packet.data.peerID) as SocketType;
-			
-			if (!target)
-				return;*/
-			
-			//console.log(packet.data);
-			//console.log("SDP: ", packet.peer.getMeshID(), " -> ", packet.data.peerID);
-			
-			let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID) as SocketType;
-			
-			this.send(target, MESH_SESSION_DESCRIPTION_CREATED, {
-				peerID: packet.peer.getMeshID(),
-				type: packet.data.type,
-				sdp: packet.data.sdp
-			});
+			if (target === undefined)
+				console.error("Invalid session description forward");
+			else
+				this.send(target, MESH_SESSION_DESCRIPTION_CREATED, {
+					peerID: packet.peer.getMeshID(),
+					type: packet.data.type,
+					sdp: packet.data.sdp
+				});
 			
 		});
 		this.onMessage(MESH_ICE_CANDIDATE_CREATED, packet => {
-			// peerID, media, index, name
 			
-			/*let mesh = this.getPeerMesh(packet.peer);
+			// Maybe verify that the peers are not already connected?
+			let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID);
 			
-			if (!mesh)
-				return;
-			
-			let target = mesh?.getPeer(packet.data.peerID) as SocketType;
-			
-			if (!target)
-				return;*/
-			
-			let target = this.getPeerMesh(packet.peer)?.getPeer(packet.data.peerID) as SocketType;
-			
-			//console.log("ICE: ", packet.peer.getMeshID(), " -> ", packet.data.peerID);
-			
-			this.send(target, MESH_ICE_CANDIDATE_CREATED, {
-				peerID: packet.peer.getMeshID(),
-				candidate: packet.data.candidate,
-				sdpMid: packet.data.sdpMid,
-				sdpMLineIndex: packet.data.sdpMLineIndex,
-				usernameFragment: packet.data.usernameFragment
-			});
+			if (target === undefined)
+				console.error("Invalid ICE candidate forward");
+			else
+				this.send(target, MESH_ICE_CANDIDATE_CREATED, {
+					peerID: packet.peer.getMeshID(),
+					candidate: packet.data.candidate,
+					sdpMid: packet.data.sdpMid,
+					sdpMLineIndex: packet.data.sdpMLineIndex,
+					usernameFragment: packet.data.usernameFragment
+				});
 			
 		});
 		
-	}
-	
-	protected createSocket(ws: WebSocket): SignalingSocket {
-		return new SignalingSocket(ws);
 	}
 	
 	public createMesh(...peers: Array<SocketType>): Mesh<SocketType> {
 		
-		let mesh = new Mesh<SocketType>(this, this.meshes);
+		let mesh = new Mesh<SocketType>(this.meshes, this);
 		this.meshes.add(mesh);
 		
-		mesh.disconnected.connect(() => {
+		let listener = new SignalListener();
+		this.meshListeners.set(mesh, listener);
+		
+		listener.connect(mesh.disconnected, () => {
+			mesh.destroy();
+			console.log("Mesh disconnected");
+		});
+		listener.connect(mesh.destroyed, () => {
+			
+			// Clean up signals
+			this.meshListeners.get(mesh)?.disconnectAll();
+			this.meshListeners.delete(mesh);
 			
 			this.meshes.delete(mesh);
 			this.meshDestroyed.emit(mesh);
-			
-			console.log("Mesh disconnected");
 			
 		});
 		
@@ -678,21 +518,18 @@ export default class SignalingServer<SocketType extends SignalingSocket> extends
 	public destroyMesh(mesh: Mesh<SocketType>) {
 		
 		if (!this.meshes.has(mesh))
-			return;
+			throw new Error("Attempted to destroy mesh that does not belong to this SignalingServer");
 		
-		mesh.kill();
+		mesh.destroy();
 		
 	}
-	/*public findMesh(socket: SignalingSocket): Mesh<SocketType> {
-		
-		for (const mesh of this.meshes)
-			if (mesh.isJoinable())
-				return mesh;
-		
-		return this.createMesh();
-		
-	}*/
 	
+	protected createSocket(ws: WebSocket): SignalingSocket {
+		return new SignalingSocket(ws);
+	}
+	public peerHasMesh(socket: SignalingSocket): boolean {
+		return this.getPeerMesh(socket) !== undefined;
+	}
 	public getPeerMesh(socket: SignalingSocket): Mesh<SocketType> | undefined {
 		return socket.getStratumGroup(this.meshes);
 	}

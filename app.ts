@@ -38,13 +38,12 @@ app.get("/", (req: express.Request, res: express.Response) => {
 });
 
 
-
 gameServer.connected.connect(() => {
 	console.log("Signaling!");
 });
-gameServer.peerConnected.connect((peer: GameSocket) => {
+/*gameServer.peerConnected.connect((peer: GameSocket) => {
 	//console.log("Client connected!");
-});
+});*/
 /*server.socketConnected.connect((socket: Socket) => {
 	
 	console.log("Socket connected");

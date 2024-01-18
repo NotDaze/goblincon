@@ -33,130 +33,7 @@ import {
 } from "./network"
 
 
-
-/*export class Room {
-	
-	public killed = new Signal<void>();
-	
-	//public emptied = new Signal<void>();
-	//public filled = new Signal<void>();
-	
-	public socketsAdded = new Signal<Array<Socket>>();
-	public socketsRemoved = new Signal<Array<Socket>>();
-	protected socketsLeaving = new Signal<Array<Socket>>();
-	
-	protected socketIndex = new Map<number, Socket>();
-	protected nextID = 0; // probably convert to an array of freed IDs
-	
-	protected capacity?: number;
-	//private tags = new Set<Symbol>();
-	
-	public hasSocket(id: number): boolean {
-		return this.socketIndex.has(id);
-	}
-	public getSocket(id: number): Socket | undefined {
-		return this.socketIndex.get(id);
-	}
-	
-	public getSocketCount(): number {
-		return this.socketIndex.size;
-	}
-	public getSockets(): Array<Socket> {
-		return Array.from(this.socketIndex.values());
-	}
-	public getSocketIDs(): Array<number> {
-		return Array.from(this.socketIndex.keys());
-	}
-	
-	public hasCapacity(): boolean {
-		return this.capacity != null;
-	}
-	public getCapacity(): number {
-		return this.capacity == null ? -1 : this.capacity;
-	}
-	public getRemainingCapacity(): number {
-		return this.capacity == null ? -1 : (this.capacity - this.getSocketCount());
-	}
-	
-	public isEmpty(): boolean {
-		return this.socketIndex.size == 0;
-	}
-	public isFull(): boolean {
-		return this.capacity != null && this.socketIndex.size >= this.capacity;
-	}
-	
-	public has(socket: Socket): boolean {
-		return socket.getRoom() === this && this.socketIndex.get(socket.getRoomID()) === socket;
-	}
-	public add(...sockets: Array<Socket>): Array<Socket> {
-		
-		let added = new Array<Socket>();
-		
-		for (const socket of sockets) {
-			
-			if (!this.has(socket)) {
-				
-				let id = this.nextID++;
-				
-				socket.handleRoomEntry(this, id);
-				this.socketIndex.set(id, socket);
-				
-				added.push(socket);
-				
-			}
-			
-			if (this.isFull()) {
-				//this.filled.emit();
-				break;
-			}
-			
-		}
-		
-		this.socketsAdded.emit(added);
-		
-		return added;
-		
-	};
-	public remove(...sockets: Array<Socket>): Array<Socket> {
-		
-		let removed = sockets.filter(this.has.bind(this));
-		
-		for (const socket of sockets) {
-			if (this.has(socket)) {
-				removed.push(socket);
-			}
-		}
-		
-		this.socketsLeaving.emit(removed);
-		
-		for (const socket of removed) {
-			this.socketIndex.delete(socket.getRoomID());
-			socket.handleRoomExit(this);
-		}
-		
-		this.socketsRemoved.emit(removed);
-		
-		return removed;
-		
-	};
-	
-	public kill() {
-		
-		this.remove(...this.getSockets());
-		this.killed.emit();
-		
-	}
-	
-	//public getID(socket: Socket) {
-	//	return socket.roomID;
-	//}
-	
-}
-*/
 export class Socket extends RemotePeer {
-	
-	//public rawReceived = Signal.fromEvent(this, "message");
-	//public closed = Signal.fromEvent(this, "closed");
 	
 	private ws: WebSocket;
 	
@@ -167,7 +44,12 @@ export class Socket extends RemotePeer {
 		
 		this.rawReceived.bindEvent(this.ws, "message");
 		
+		this.disconnected.bindEvent(this.ws, "close");
+		
+		//this.ws.on("")
+		
 		this.ws.on("close", (code: number, reason: Buffer): void => {
+			// Maybe wants some better handling for unexpected disconnect
 			this.close();
 		});
 		
@@ -192,26 +74,23 @@ export class SocketServer<SocketType extends Socket> extends LocalMultiPeer<Sock
 		clientTracking: false
 	};
 	
-	//private webSocketConnected: Signal<WebSocket>;
-	
-	//public sockets = new Set<Socket>();
-	
 	private wss: WebSocketServer;
-	
-	//private buffer = new ByteOStream();
-	
-	//protected socketCreation = new Signal<WebSocket>();
-	
 	
 	constructor(socketClass: { new(ws: WebSocket): SocketType }, wssArgs = SocketServer.WSS_ARGS) {
 		
 		super();
 		
-		//this.messageIndex = messageIndex;
 		this.wss = new WebSocketServer(wssArgs);
 		
 		this.connected.bindEvent(this.wss, "listening");
-		//this.socketCreation.bindEvent(this.wss, "connection");
+		this.disconnected.bindEvent(this.wss, "close");
+		
+		
+		//this.wss.addListener(""
+		
+		this.wss.on("error", (error: Error) => {
+			console.error(`SocketServer Error: ${error.cause}`);
+		});
 		
 		this.wss.on("connection", (ws: WebSocket) => {
 			this.addPeer(new socketClass(ws));

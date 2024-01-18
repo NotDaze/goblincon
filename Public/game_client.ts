@@ -21,6 +21,7 @@ import State from "../Modules/Core/state"
 import { Message, Packet } from "../Modules/Network/network"
 
 import GameSignalingMessages, {
+	
 	GAME_CREATE,
 	GAME_JOIN,
 	GAME_JOINED,
@@ -28,7 +29,13 @@ import GameSignalingMessages, {
 	GAME_LOBBY_PLAYERS_JOINED,
 	GAME_LOBBY_PLAYERS_LEFT,
 	
-	GAME_START
+	GAME_START,
+	
+	
+	MIN_PLAYER_COUNT,
+	//MAX_PLAYER_COUNT,
+	
+	
 } from "../MessageLists/game_signaling"
 import GameMessages, {
 	
@@ -47,7 +54,7 @@ import GameMessages, {
 	VOTING_CHOICE,
 	DONE_VOTING,
 	
-	SCORING_START
+	SCORING_START,
 	
 	//VOTING_RESULTS,
 } from "../MessageLists/game"
@@ -175,7 +182,7 @@ export class RemoteGameClient extends RemoteMeshClient {
 				return;
 		}
 		
-		// Done with drawing
+		// We have the entire drawing
 		let stitched = this.currentDrawing[0];
 		
 		for (let i = 1; i < count; i++)
@@ -236,8 +243,6 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	doneLoading = this.playerState.transitionFrom(PlayerState.LOADING);
 	
 	lobbyPlayerListUpdate = new Signal<void>();
-	
-	
 	
 	
 	//drawingStarted = new Signal<string>();
@@ -683,7 +688,12 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	}
 	
 	canStartGame(): boolean {
-		return this.isHost()// && this.getPeerCount() >= 2;
+		
+		if (!this.isHost())
+			return false;
+		
+		return this.isHost() && (this.getPeerCount() + 1) >= MIN_PLAYER_COUNT;
+		
 	}
 	startGame(): void {
 		
@@ -798,17 +808,22 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		
 	}
 	
-	submitVote(player: RemoteGameClient): void {
+	submitVote(playerID: number): void {
 		
 		if (!this.playerState.is(PlayerState.VOTING)) {
 			console.error("Player voted while in invalid state.");
 			return;
 		}
 		
-		this.presence.setVote(this.round, player.getID());
+		if (!this.hasPeerID(playerID)) {
+			console.error("Player submitted invalid vote.");
+			return;
+		}
+		
+		this.presence.setVote(this.round, playerID);
 		
 		this.playerState.set(PlayerState.IDLE);
-		this.sendHost(VOTING_CHOICE, player.getID());
+		this.sendHost(VOTING_CHOICE, playerID);
 		
 	}
 	

@@ -281,7 +281,7 @@ export class MessageHandler<RemotePeerType extends RemotePeer | void> {
 	
 }
 
-export type MultiPeerConnectionStatus<PeerType> = [ pending: Array<PeerType>, connected: Array<PeerType>, disconnected: Array<PeerType> ];
+export type MultiPeerConnectionStatus<PeerType> = [ connecting: Array<PeerType>, connected: Array<PeerType>, disconnected: Array<PeerType> ];
 
 export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerType> {
 	
@@ -305,33 +305,57 @@ export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerTy
 		
 	}
 	
-	hasPeer(id: number): boolean {
-		return this.map.has(id);
+	/*hasPeer(id: number): boolean {
+		return this.has(id);
+	}*/
+	
+	
+	hasPeer(peer: PeerType): boolean {
+		return this.hasValue(peer);
 	}
 	getPeer(id: number): PeerType | undefined {
-		return this.map.get(id);
+		return this.getValue(id);
 	}
-	
-	getPeers(ids: Iterable<number>): Set<PeerType> {
+	getPeers(ids: Iterable<number> = this.ids): Array<PeerType> {
 		
-		if (ids == undefined)
-			return this.peers;
-		
-		let out = new Set<PeerType>();
+		let out = new Array<PeerType>();
 		
 		for (const id of ids) {
 			
 			let peer = this.getPeer(id);
 			
 			if (peer !== undefined) // error message?
-				out.add(peer);
+				out.push(peer);
 			
 		}
 		
 		return out;
 		
 	}
-	getPeerIDs(peers: Iterable<PeerType>): Set<number> {
+	
+	hasPeerID(id: number): boolean {
+		return super.hasID(id);
+	}
+	getPeerID(peer: PeerType): number {
+		return this.getID(peer);
+	}
+	getPeerIDs(peers: Iterable<PeerType> = this.peers): Array<number> {
+		
+		let out = new Array<number>();
+		
+		for (const peer of peers) {
+			
+			let id = this.getID(peer);
+			
+			if (id !== -1)
+				out.push(id);
+			
+		}
+		
+		return out;
+		
+	}
+	/*getPeerIDs(peers: Iterable<PeerType>): Set<number> {
 		
 		let out = new Set<number>();
 		
@@ -340,7 +364,7 @@ export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerTy
 		
 		return out;
 		
-	}
+	}*/
 	
 	getStatus(): MultiPeerConnectionStatus<PeerType> {
 		
@@ -348,12 +372,12 @@ export class RemotePeerIndex<PeerType extends RemotePeer> extends IDIndex<PeerTy
 		
 		for (const peer of this.peers) {
 			
-			if (peer.state.value === ConnectionState.CONNECTED)
-				status[1].push(peer);
-			else if (peer.state.value === ConnectionState.DISCONNECTED)
-				status[2].push(peer);
-			else
+			if (peer.state.value === ConnectionState.CONNECTING)
 				status[0].push(peer);
+			else if (peer.state.value === ConnectionState.CONNECTED)
+				status[1].push(peer);
+			else // Disconnected or new
+				status[2].push(peer);
 			
 		}
 		
@@ -689,11 +713,19 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		return this.peers.has(peer);
 	}*/
 	
-	public hasPeer(id: number): boolean {
-		return this.peerIndex.hasPeer(id);
+	
+	public hasPeer(peer: RemotePeerType): boolean {
+		return this.peerIndex.hasPeer(peer);
 	}
 	public getPeer(id: number): RemotePeerType | undefined {
 		return this.peerIndex.getPeer(id);
+	}
+	
+	public hasPeerID(id: number): boolean {
+		return this.peerIndex.hasID(id);
+	}
+	public getPeerID(peer: RemotePeerType): number {
+		return this.peerIndex.getPeerID(peer);
 	}
 	
 	public getPeers(): Set<RemotePeerType> {
@@ -702,18 +734,24 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 	public getPeerCount(): number {
 		return this.peers.size;
 	}
+	public getPeerArray(): Array<RemotePeerType> {
+		return Array.from(this.peers);
+	}
 	
+	public getPeerIDs(): Set<number> {
+		return this.ids;
+	}
 	
 	public addPeer(peer: RemotePeerType, id: number = this.peerIndex.getNextID()): void {
 		
 		let listener = new SignalListener();
 		this.peerListeners.set(peer, listener);
 		
-		listener.connect(peer.rawReceived, (raw: Uint8Array) => { this.handleRaw(peer, raw); });
-		listener.connect(peer.connected, () => { this.peerConnected.emit(peer); });
-		listener.connect(peer.disconnected, () => { this.peerDisconnected.emit(peer); });
-		listener.connect(peer.connecting, () => { this.peerConnecting.emit(peer); });
-		listener.connect(peer.connectionFailed, () => { this.peerConnectionFailed.emit(peer); });
+		listener.connect(peer.rawReceived, (raw: Uint8Array) => this.handleRaw(peer, raw));
+		listener.connect(peer.connected, () => this.peerConnected.emit(peer));
+		listener.connect(peer.disconnected, () => this.peerDisconnected.emit(peer));
+		listener.connect(peer.connecting, () => this.peerConnecting.emit(peer));
+		listener.connect(peer.connectionFailed, () => this.peerConnectionFailed.emit(peer));
 		
 		this.peerIndex.add(peer, id);
 		peer.setID(id);
@@ -746,19 +784,19 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		
 		//if (peer.state.is(ConnectionState.CONNECTED))
 		//	peer.state.set(ConnectionState.DISCONNECTED);
-		peer.close();
+		
 		//this.disconnectPeer(peer);
 		
-		if (this.getPeer(peer.getID()) !== peer)
+		if (!this.hasPeer(peer)) {
 			console.error("Attempted to drop invalid peer.");
+			return;
+		}
 		
-		if (!this.peerListeners.has(peer)) {
-			console.error("Dropping peer that has no listener.");
-		}
-		else { // disconnect signals
-			this.peerListeners.get(peer)?.disconnectAll();
-			this.peerListeners.delete(peer);
-		}
+		peer.close();
+		
+		// Clean up signals
+		this.peerListeners.get(peer)?.disconnectAll();
+		this.peerListeners.delete(peer);
 		
 		this.peerIndex.remove(peer.getID());
 		this.peerDropped.emit(peer);
@@ -776,10 +814,10 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 	}
 	
 	// Inbound Messages
-	
+	/* All handled by LocalPeer superclass */
 	
 	// Outbound Messages
-	private sendSafe(peers: Set<RemotePeerType>, raw: Uint8Array, transferMode: TransferMode) {
+	private sendSafe(peers: Iterable<RemotePeerType>, raw: Uint8Array, transferMode: TransferMode) {
 		
 		for (const peer of peers) {
 			
@@ -791,7 +829,6 @@ export class LocalMultiPeer<RemotePeerType extends RemotePeer> extends LocalPeer
 		}
 		
 	}
-	
 	
 	public sendRaw(peers: RemotePeerType | Iterable<RemotePeerType>, raw: Uint8Array, transferMode = TransferMode.RELIABLE): void {
 		this.sendSafe(new Set(peers instanceof RemotePeer ? [peers] : peers), raw, transferMode);
@@ -903,7 +940,7 @@ export class RemotePeer extends Peer {
 //export type GroupStratum<PeerType extends RemotePeer, GroupType extends Group<PeerType>> = Set<GroupType>;
 export class Group<PeerType extends RemotePeer> {
 	
-	public dropped = new Signal<void>();
+	//public dropped = new Signal<void>();
 	
 	//public emptied = new Signal<void>();
 	//public filled = new Signal<void>();
@@ -912,13 +949,15 @@ export class Group<PeerType extends RemotePeer> {
 	public peersLeaving = new Signal<Array<PeerType>>();
 	public peersRemoved = new Signal<Array<PeerType>>();
 	
+	public destroyed = new Signal<void>();
+	
 	//public peerAdded = new Signal<
 	
 	//protected stratum?: GroupStratum;
 	protected stratum?: Set<Group<PeerType>>;
 	protected capacity?: number;
 	
-	protected localPeer: LocalMultiPeer<PeerType>;
+	protected localPeer?: LocalMultiPeer<PeerType>;
 	protected peerIndex = new RemotePeerIndex<PeerType>(); // weakset?
 	//protected nextID = 0; // probably convert to an array of freed IDs
 	
@@ -938,7 +977,7 @@ export class Group<PeerType extends RemotePeer> {
 		return this.peerIndex.ids;
 	}
 	
-	constructor(localPeer: LocalMultiPeer<PeerType>, stratum?: Set<Group<PeerType>>) {
+	constructor(stratum?: Set<Group<PeerType>>, localPeer?: LocalMultiPeer<PeerType>) {
 		
 		this.localPeer = localPeer;
 		this.stratum = stratum;
@@ -954,6 +993,20 @@ export class Group<PeerType extends RemotePeer> {
 		return this.stratum;
 	}
 	
+	public hasPeerID(id: number): boolean {
+		return this.peerIndex.hasPeerID(id);
+	}
+	public getPeerID(peer: PeerType): number {
+		return this.peerIndex.getPeerID(peer);
+	}
+	
+	public hasPeer(peer: PeerType): boolean {
+		return this.peerIndex.hasPeer(peer);
+	}
+	public getPeer(id: number): PeerType | undefined {
+		return this.peerIndex.getPeer(id);
+	}
+	
 	public getPeers(): Set<PeerType> {
 		return this.peers;
 	}
@@ -965,7 +1018,7 @@ export class Group<PeerType extends RemotePeer> {
 		return this.getPeerCount() == 0;
 	}
 	public isFull(): boolean {
-		return this.capacity != undefined && this.getPeerCount() >= this.capacity;
+		return this.capacity !== undefined && this.getPeerCount() >= this.capacity;
 	}
 	
 	public hasCapacity(): boolean {
@@ -1046,27 +1099,35 @@ export class Group<PeerType extends RemotePeer> {
 		
 	};
 	
+	private verifyHasLocalPeer() {
+		if (this.localPeer === undefined)
+			throw new Error("Attempted to send to peers of group with no bound LocalPeer");
+	}
 	public send<T>(peers: PeerType | Iterable<PeerType>, message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
-		this.localPeer.send(peers, message, data, transferMode);
+		this.verifyHasLocalPeer();
+		this.localPeer?.send(peers, message, data, transferMode);
 	}
 	public sendAll<T>(message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
-		this.localPeer.send(this.peers, message, data, transferMode);
+		this.verifyHasLocalPeer();
+		this.localPeer?.send(this.peers, message, data, transferMode);
 	}
 	public sendAllExcept<T>(exclusions: PeerType | Iterable<PeerType>, message: Message<T>, data: T = undefined as T, transferMode = message.getTransferMode()): void {
+		
+		this.verifyHasLocalPeer();
 		
 		let peers = new Set(this.peers);
 		
 		for (const peer of (exclusions instanceof RemotePeer ? [exclusions] : exclusions))
 			peers.delete(peer);
 		
-		this.localPeer.send(peers, message, data, transferMode);
+		this.localPeer?.send(peers, message, data, transferMode);
 		
 	}
 	
-	public kill(): void {
+	public destroy(): void {
 		
 		this.remove(...this.getPeers());
-		//this.killed.emit();
+		this.destroyed.emit();
 		
 	}
 	

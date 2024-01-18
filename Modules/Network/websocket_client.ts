@@ -5,10 +5,7 @@ import {
 	
 	ConnectionState,
 	
-	Packet,
 	Message,
-	MessageHandler,
-	
 	LocalMonoPeer,
 	
 } from "./network"
@@ -32,10 +29,10 @@ export default class Socket extends LocalMonoPeer {
 		
 		this.ws.binaryType = "arraybuffer";
 		
-		this.ws.onopen = (e: Event) => { this.state.set(ConnectionState.CONNECTED) };
-		this.ws.onclose = (e: CloseEvent) => { this.close() };
-		this.ws.onerror = (e: Event) => { this.close() };
-		this.ws.onmessage = (e: MessageEvent<ArrayBuffer>) => { this.handleRaw(undefined, new Uint8Array(e.data)) };
+		this.ws.onopen = (e: Event) => this.state.set(ConnectionState.CONNECTED);
+		this.ws.onclose = (e: CloseEvent) => this.close();
+		this.ws.onerror = (e: Event) => this.close(); // Maybe wants some error handling
+		this.ws.onmessage = (e: MessageEvent<ArrayBuffer>) => this.handleRaw(undefined, new Uint8Array(e.data));
 		
 	}
 	

@@ -49,7 +49,7 @@ function PlayerList() {
 function LobbyHeader({ code, name }: { code: string, name: string }) {
 	
 	const copyCode = () => {
-		navigator.clipboard.writeText(`localhost:5050?code=${code}`);
+		navigator.clipboard.writeText(`${window.location.host}?code=${code}`);
 	};
 	
 	return (

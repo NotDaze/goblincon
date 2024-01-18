@@ -582,19 +582,13 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		});
 		
 		this.onServerMessage(MESH_CONNECT_PEERS, packet => {
-			
-			//console.log("Creating peers")
 			this.createPeers(packet.data.peerIDs);
-			
 		});
 		this.onServerMessage(MESH_DISCONNECT_PEERS, packet => {
-			
 			this.dropPeers(packet.data.peerIDs);
-			
 		});
+		
 		this.onServerMessage(MESH_SESSION_DESCRIPTION_CREATED, packet => {
-			
-			//console.log(packet.data);
 			
 			this.getPeer(packet.data.peerID)?.setRemoteDescription({
 				type: packet.data.type,
@@ -603,8 +597,6 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			
 		});
 		this.onServerMessage(MESH_ICE_CANDIDATE_CREATED, packet => {
-			
-			//console.log(packet.data);
 			
 			this.getPeer(packet.data.peerID)?.addRemoteIceCandidate({
 				candidate: packet.data.candidate,
@@ -615,11 +607,8 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 			
 		});
 		
-		//this.onMessage(MESH_DISCONNECT_PEERS, (packet: Packet<RemoteMeshClient>) => {
-			
-		//});
-		
 	}
+	
 	
 	protected createPeers(ids: Array<number>): void {
 		
@@ -654,7 +643,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 		
 	}
 	
-	private dropPeers(ids: Iterable<number>): void {
+	protected dropPeers(ids: Iterable<number>): void {
 		
 		for (const id of ids) {
 			
@@ -668,16 +657,7 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	}
 	
 	
-	private getPeerIDs(peers: Iterable<RemoteClientType> = this.peers): Set<number> {
-		
-		let out = new Set<number>();
-		
-		for (const peer of peers)
-			out.add(peer.getID());
-		
-		return out;
-		
-	}
+	
 	
 	/*private checkStatus(): [connected: Set<RemoteClientType>, disconnected: Set<RemoteClientType>, pending: Set<RemoteClientType>] {
 		
