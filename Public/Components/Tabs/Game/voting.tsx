@@ -2,12 +2,12 @@
 
 import React from "react";
 import client from "../../../client_instance";
-import { RemoteGameClient } from "../../../game_client";
+//import { RemoteGameClient } from "../../../game_client";
 //import LocalGameClient from '../../../game_client';
 
 function VoteBtn({ playerID }: { playerID: number }) {
 	
-	let [enabled, setEnabled] = React.useState(true);
+	const [enabled, setEnabled] = React.useState(true);
 	
 	React.useEffect(() => (
 		client.doneVoting.subscribe(() => setEnabled(false),
@@ -55,9 +55,9 @@ function PlayerSubmission({ playerID }: { playerID: number }) {
 	else {
 		
 		if (isClient)
-			voteCountStr = `${voteCount} vote${voteCount > 1 && "s"}!`;
+			voteCountStr = `${voteCount} vote${voteCount > 1 ? "s" : ""}!`;
 		else
-			voteCountStr = `${voteCount} vote${voteCount > 1 && "s"}`;
+			voteCountStr = `${voteCount} vote${voteCount > 1 ? "s" : ""}`;
 		
 	}
 	

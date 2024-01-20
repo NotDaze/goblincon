@@ -180,10 +180,11 @@ html, body, #app, .tab {
 	gap: 1em;
 	
 	align-self: stretch;
+	max-height: 100vh;
 	
 }
 
-#drawing #player-list {
+#drawing .player-list {
 	min-width: 10em;
 }
 
@@ -196,7 +197,7 @@ html, body, #app, .tab {
 	
 	flex: 1;
 	align-self: stretch;
-	min-width: 80vmin;
+	width: 80vmin;
 	
 	padding: 5px;
 	border-radius: 5px;
@@ -224,6 +225,8 @@ html, body, #app, .tab {
 	aspect-ratio: 1;
 	width: 100%;
 	height: auto;
+	
+	touch-action: none; /* lets player draw */
 	
 	background-color: white;
 	

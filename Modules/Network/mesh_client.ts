@@ -610,6 +610,10 @@ export default class LocalMeshClient<RemoteClientType extends RemoteMeshClient> 
 	}
 	
 	
+	get serverState() {
+		return this.socket.state;
+	}
+	
 	protected createPeers(ids: Array<number>): void {
 		
 		for (const id of ids)

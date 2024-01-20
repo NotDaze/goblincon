@@ -257,12 +257,15 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 	
 	readonly presence = new PlayerPresence();
 	
+	private creatureNames = new Array<string>();
+	private roundCount = 3;
+	
 	private code = "";
 	private round = 0;
 	
-	private creatureNames = new Array<string>();
 	
 	private phaseTimerTimeout?: NodeJS.Timeout;
+	
 	
 	constructor(serverUrl: string, protocols: Array<string> = [], rtcConfig = RemoteMeshClient.DEFAULT_CONFIG) {
 		
@@ -856,6 +859,17 @@ export default class LocalGameClient extends LocalMeshClient<RemoteGameClient> {
 		return count;
 		
 	}
+	getScore(id: number): number {
+		
+		let total = 0;
+		
+		for (let i = 0; i < this.roundCount; i++)
+			total += this.getVoteCount(id, i);
+		
+		return total;
+		
+	}
+	
 	/*getVoteCounts(round = this.round): Map<number, number> {
 		
 		for (const [id, presence] of this.getPresences()) {

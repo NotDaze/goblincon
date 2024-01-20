@@ -11,11 +11,10 @@ import { Countdown } from "../../countdown";
 
 function RoundInfo() {
 	
-	
-	
 	return (
 		
 		<div id="round-info">
+			<div>Draw a creature named...</div>
 			<div id="creature-name">{client.getCreatureName()}</div>
 			<Countdown time={Date.now() + LocalGameClient.DRAWING_TIME} />
 		</div>

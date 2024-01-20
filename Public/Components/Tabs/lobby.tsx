@@ -63,6 +63,19 @@ function LobbyHeader({ code, name }: { code: string, name: string }) {
 
 export default function Lobby() {
 	
+	const [canStart, setCanStart] = React.useState(false);
+	
+	React.useEffect(() => {
+		
+		const update = () => setCanStart(client.canStartGame());
+		
+		return (
+			client.peerAdded.subscribe(() => update(),
+			client.peerDropped.subscribe(() => update()))
+		);
+		
+	}, []);
+	
 	return (
 		<div id="lobby" className="tab">
 			<LobbyHeader code={client.getGameCode()} name={client.presence.getName()} />

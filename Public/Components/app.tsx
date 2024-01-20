@@ -9,6 +9,7 @@ import Game from "./Tabs/game";
 
 //import LocalGameClient, { RemoteGameClient } from "../game_client";
 import client from "../client_instance";
+import { ConnectionState } from "../../Modules/Network/network";
 
 //import { GAME_CREATE_RESPONSE } from "../../MessageLists/game_signaling";
 
@@ -75,15 +76,23 @@ export default function App() {
 	const [tab, setTab] = React.useState<keyof typeof Tabs>("Connecting");
 	const Tab = Tabs[tab];
 	
-	React.useEffect(() => (
+	React.useEffect(() => {
 		
-		client.serverConnected.subscribe(() => setTab("Landing"),
-		client.serverDisconnected.subscribe(() => setTab("Connecting"),
-		client.gameJoined.subscribe(() => setTab("Lobby"),
-		client.gameStarted.subscribe(() => setTab("Game"),
-		client.gameLeft.subscribe(() => setTab("Landing"))))))
+		// For edge cases where the server connection happens before the page loads
+		if (client.serverState.is(ConnectionState.CONNECTED))
+			setTab("Landing");
 		
-	), []);
+		return (
+			client.serverConnected.subscribe(() => setTab("Landing"),
+			client.serverDisconnected.subscribe(() => setTab("Connecting"),
+			client.gameJoined.subscribe(() => setTab("Lobby"),
+			client.gameStarted.subscribe(() => setTab("Game"),
+			client.gameLeft.subscribe(() => setTab("Landing"))))))
+		);
+		
+	}, []);
+	
+	
 	
 	return <div id="app"><Tab /></div>;
 	
